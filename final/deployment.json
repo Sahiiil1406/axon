@@ -5,10 +5,10 @@
   "sidecar": "https://altmempool.forshtat.com/rpc",
   "registry": "0xe4a0ae628805ca2a1304b7b655aec991a0ad99ec",
   "agentAccount": "0x96a21935ddbf224d64efc933449016bbb4551a2e",
-  "counter": "0x2eecd1b282d9fdc3cbe14ab10850c531c542d80f",
+  "counter": "0x7da3c1783ff52e381b8db09e23b459b7e54198c6",
   "owner": "0x0b012EEfCff398daB58e418d85e30398346a5c51",
   "agentKey": "0x09c57921D33232f7B5bf1cFB0B3C2a084eE900a9",
-  "grantHash": "0x4da630247a9a0a44f5c852be04bf62c1997f0a528786f10aeae34cb6c827554f",
+  "grantHash": "0xcc5c16c774672bd3a80c2211252ea480aeb7a0dc46032b96582bec6e7f81b4f8",
   "grantActive": false,
   "budgetPerEpoch": "10000000000000000",
   "human": {
@@ -19,6 +19,6 @@
     "step": 10,
     "price": "100000000000000"
   },
-  "deployTx": "0x88c42565d925542465743c434b5fa33a7d4d87775db0e65454776ccf21b8f139",
-  "deployedAt": "2026-11-05T20:58:49.918Z"
+  "deployTx": "0xda8945fe142464f307d52bdf37bc6744f42a8b42893b78e306f2cb2b5c305681",
+  "deployedAt": "2026-11-05T21:13:30.466Z"
 }
