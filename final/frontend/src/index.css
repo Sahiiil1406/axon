@@ -2147,3 +2147,131 @@ body {
   pointer-events: none;
   z-index: -2;
 }
+
+/* One full-width simulation includes the gray space above and below the panel. */
+.axon-hero > .hero-art {
+  --hero-panel-inset: 24px;
+  inset: calc(-1 * var(--hero-frame-gap)) auto;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: var(--background);
+}
+.axon-hero > .hero-art::before {
+  content: "";
+  position: absolute;
+  inset: var(--hero-frame-gap) var(--hero-panel-inset);
+  background: color-mix(in srgb, var(--axon-cyan) 4%, var(--background));
+}
+.axon-hero .hero-sharks,
+.axon-hero .hero-sharks-tinted {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.axon-hero .hero-sharks {
+  filter: grayscale(1);
+  mix-blend-mode: screen;
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    var(--hero-panel-inset) var(--hero-frame-gap),
+    var(--hero-panel-inset) calc(100% - var(--hero-frame-gap)),
+    calc(100% - var(--hero-panel-inset)) calc(100% - var(--hero-frame-gap)),
+    calc(100% - var(--hero-panel-inset)) var(--hero-frame-gap),
+    var(--hero-panel-inset) var(--hero-frame-gap));
+}
+.axon-hero .hero-sharks-tinted {
+  clip-path: inset(var(--hero-frame-gap) var(--hero-panel-inset));
+  filter: grayscale(1) sepia(1) saturate(5) hue-rotate(125deg);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+@media (max-width: 767px) {
+  .axon-hero > .hero-art { --hero-panel-inset: 8px; }
+}
+
+@media (min-width: 1700px) {
+  .axon-hero > .hero-art { --hero-panel-inset: calc((100vw - 1480px) / 2); }
+}
+
+/* Hover navigation keeps one panel while its content and link highlight transition. */
+.axon-header .nav-links { position: relative; isolation: isolate; }
+.nav-hover-highlight {
+  position: absolute;
+  left: 0;
+  top: -9px;
+  bottom: -9px;
+  z-index: -1;
+  pointer-events: none;
+  background: #ffffff0c;
+  border-bottom: 1px solid var(--axon-mint);
+  transition: transform 220ms ease, width 220ms ease, opacity 160ms ease;
+}
+.axon-header .nav-links > button,
+.axon-header .nav-links > a { transition: color 160ms ease; }
+.axon-header .nav-links > button svg { transition: transform 200ms ease; }
+.axon-header .nav-links > button[aria-expanded="true"] svg { transform: rotate(180deg); }
+.axon-header .nav-dropdown {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-7px);
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms;
+}
+.axon-header .nav-dropdown[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.nav-dropdown-content { animation: nav-content-in 180ms ease both; }
+.axon-header .nav-dropdown a {
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.axon-header .nav-dropdown a:hover,
+.axon-header .nav-dropdown a:focus-visible { transform: translateX(3px); }
+.axon-header .nav-dropdown a svg { transition: transform 160ms ease; }
+.axon-header .nav-dropdown a:hover svg { transform: translate(2px, -2px); }
+@keyframes nav-content-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .nav-hover-highlight,
+  .axon-header .nav-links > button,
+  .axon-header .nav-links > a,
+  .axon-header .nav-links > button svg,
+  .axon-header .nav-dropdown,
+  .axon-header .nav-dropdown a,
+  .axon-header .nav-dropdown a svg { transition: none; }
+  .nav-dropdown-content { animation: none; }
+}
+
+/* The permission zone stays neutral; only swimmers within it take the cyan tint. */
+.axon-hero {
+  color: var(--foreground);
+  background: var(--background);
+}
+.axon-hero::before { background: none; }
+.axon-hero .axon-announcement {
+  color: var(--foreground);
+  border-color: var(--border);
+  background: #ffffff05;
+}
+.axon-hero .axon-announcement .status-dot { background: var(--axon-mint); }
+.axon-hero .announcement-divider { background: var(--border); }
+.axon-hero .hero-docs { color: var(--foreground); border-color: var(--border); }
+.axon-hero a.bg-secondary { background: var(--axon-mint); color: #151414; border-color: var(--axon-mint); }
+.axon-hero a.bg-secondary:hover { background: var(--axon-aqua); }
+.axon-hero .hero-signal > span { background: linear-gradient(90deg, transparent, #ffffff60); }
+
+.axon-hero > .corner-marker {
+  background: var(--axon-cyan);
+  border-color: var(--axon-cyan);
+}
+
+/* A quiet cyan outline ties the permission zone to its corner anchors. */
+.axon-hero {
+  border-color: transparent;
+}
+.axon-hero > .hero-art::before {
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--axon-cyan) 15%, transparent);
+}

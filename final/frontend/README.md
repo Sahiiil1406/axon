@@ -16,7 +16,7 @@ See [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) for palette, neutral colors, corner f
 
 ## Live console routes
 
-The existing `../../web` demo is integrated as React pages with the Axon theme:
+The legacy demo is integrated as React pages with the Axon theme:
 
 - `/app`: function selector, amount presets, `humanCall` / `agentCall`, counter and payment comparison, latest receipt and recent calls.
 - `/app/permissions`: live grant details, epoch budget, selector allowlist, save/regrant, reset, revocation confirmation, and owner transaction results.
@@ -45,3 +45,9 @@ AXON_API_PROXY_TARGET=http://127.0.0.1:8901 npm run dev -- --port 5181
 ```
 
 The fixture is never imported by the application or used as a live API fallback. Stop it when testing is complete. It exercises calls, payments, budget rejection, allowlists, grant revocation/regrant and history through the same HTTP contract.
+
+## ASCII sharks component
+
+`src/components/ascii-sharks` contains the reusable `AsciiSharks` component,
+its canvas engine, types, usage notes, and MIT license. The landing-page hero
+uses it as a full-width background. See its [README](./src/components/ascii-sharks/README.md).

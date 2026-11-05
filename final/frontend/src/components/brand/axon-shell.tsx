@@ -1,5 +1,11 @@
 import { SiteLink } from "@/components/site-link"
-import { useState } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type PointerEvent,
+} from "react"
 import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react"
 import { ActionLink, Logo } from "./primitives"
 
@@ -41,28 +47,107 @@ const groups = {
 } as const
 export function AxonHeader() {
   const [open, setOpen] = useState<string | null>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [highlight, setHighlight] = useState({ x: 0, width: 0, visible: false })
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = null
+  }
+  const showMenu = (name: string | null) => {
+    cancelClose()
+    setOpen(name)
+  }
+  const highlightLink = (
+    event: PointerEvent<HTMLElement> | FocusEvent<HTMLElement>
+  ) => {
+    const target = event.currentTarget
+    setHighlight({
+      x: target.offsetLeft - 10,
+      width: target.offsetWidth + 20,
+      visible: true,
+    })
+  }
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    },
+    []
+  )
   return (
     <header
       className="site-header axon-header"
+      onPointerEnter={cancelClose}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== "mouse") return
+        cancelClose()
+        closeTimer.current = setTimeout(() => {
+          setOpen(null)
+          setHighlight((previous) => ({ ...previous, visible: false }))
+        }, 160)
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          showMenu(null)
+          setHighlight((previous) => ({ ...previous, visible: false }))
+        }
+      }}
       onKeyDown={(e) => {
         if (e.key === "Escape") setOpen(null)
       }}
     >
       <Logo />
       <nav aria-label="Main navigation" className="nav-links">
+        <span
+          className="nav-hover-highlight"
+          aria-hidden="true"
+          style={{
+            width: highlight.width,
+            transform: `translateX(${highlight.x}px)`,
+            opacity: highlight.visible ? 1 : 0,
+          }}
+        />
         {Object.entries(groups).map(([name]) => (
           <button
             aria-expanded={open === name}
             aria-controls="axon-menu"
             key={name}
-            onClick={() => setOpen(open === name ? null : name)}
+            onPointerEnter={(event) => {
+              if (event.pointerType !== "mouse") return
+              highlightLink(event)
+              showMenu(name)
+            }}
+            onFocus={(event) => {
+              highlightLink(event)
+              if (event.currentTarget.matches(":focus-visible")) showMenu(name)
+            }}
+            onClick={() => showMenu(name)}
           >
             {name}
             <ChevronDown size={12} />
           </button>
         ))}
-        <SiteLink href="/#guardrails">Guardrails</SiteLink>
-        <SiteLink href="/docs">Docs</SiteLink>
+        {[
+          ["Guardrails", "/#guardrails"],
+          ["Docs", "/docs"],
+        ].map(([label, href]) => (
+          <SiteLink
+            key={label}
+            href={href}
+            onPointerEnter={(event) => {
+              if (event.pointerType === "mouse") {
+                highlightLink(event)
+                showMenu(null)
+              }
+            }}
+            onFocus={(event) => {
+              highlightLink(event)
+              showMenu(null)
+            }}
+            onClick={() => showMenu(null)}
+          >
+            {label}
+          </SiteLink>
+        ))}
       </nav>
       <div className="nav-actions">
         <span className="devnet-label">
@@ -80,12 +165,15 @@ export function AxonHeader() {
           {open ? <X /> : <Menu />}
         </button>
       </div>
-      {open && (
-        <nav
-          id="axon-menu"
-          className="surface nav-dropdown"
-          aria-label={`${open} navigation`}
-        >
+      <nav
+        id="axon-menu"
+        className="surface nav-dropdown"
+        data-open={!!open}
+        aria-hidden={!open}
+        inert={!open}
+        aria-label={`${open ?? "Protocol"} navigation`}
+      >
+        <div className="nav-dropdown-content" key={open}>
           {(open === "mobile"
             ? Object.values(groups).flat()
             : (groups[open as keyof typeof groups] ?? [])
@@ -104,8 +192,8 @@ export function AxonHeader() {
               </span>
             </SiteLink>
           ))}
-        </nav>
-      )}
+        </div>
+      </nav>
     </header>
   )
 }
