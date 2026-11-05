@@ -1,0 +1,166 @@
+import { useState } from "react"
+import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react"
+import { ActionLink, Logo } from "./primitives"
+
+const groups = {
+  Protocol: [
+    {
+      label: "Architecture",
+      href: "/#architecture",
+      detail: "From delegated intent to guarded execution",
+    },
+    {
+      label: "Permission layer",
+      href: "/#permissions",
+      detail: "Budgets, scopes, and live revocation",
+    },
+    {
+      label: "Alt mempool",
+      href: "/#alt-mempool",
+      detail: "Validation built for live authority",
+    },
+  ],
+  Developers: [
+    {
+      label: "Technical overview",
+      href: "/docs",
+      detail: "Explore the account and registry model",
+    },
+    {
+      label: "Policy playground",
+      href: "/#playground",
+      detail: "See a permission check in action",
+    },
+    {
+      label: "Design system",
+      href: "/design-system",
+      detail: "Tokens, components, and patterns",
+    },
+  ],
+} as const
+export function AxonHeader() {
+  const [open, setOpen] = useState<string | null>(null)
+  return (
+    <header
+      className="site-header axon-header"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setOpen(null)
+      }}
+    >
+      <Logo />
+      <nav aria-label="Main navigation" className="nav-links">
+        {Object.entries(groups).map(([name]) => (
+          <button
+            aria-expanded={open === name}
+            aria-controls="axon-menu"
+            key={name}
+            onClick={() => setOpen(open === name ? null : name)}
+          >
+            {name}
+            <ChevronDown size={12} />
+          </button>
+        ))}
+        <a href="/#guardrails">Guardrails</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <div className="nav-actions">
+        <span className="devnet-label">
+          <i /> EIP-8141 prototype
+        </span>
+        <ActionLink href="/#playground" variant="outline">
+          Explore Axon <ArrowUpRight size={14} />
+        </ActionLink>
+        <button
+          className="mobile-toggle"
+          aria-label={open ? "Close navigation" : "Open navigation"}
+          aria-expanded={!!open}
+          onClick={() => setOpen(open ? null : "mobile")}
+        >
+          {open ? <X /> : <Menu />}
+        </button>
+      </div>
+      {open && (
+        <nav
+          id="axon-menu"
+          className="surface nav-dropdown"
+          aria-label={`${open} navigation`}
+        >
+          {(open === "mobile"
+            ? Object.values(groups).flat()
+            : (groups[open as keyof typeof groups] ?? [])
+          ).map((item) => (
+            <a href={item.href} key={item.label} onClick={() => setOpen(null)}>
+              <span className="flex justify-between">
+                {item.label}
+                <ArrowUpRight size={15} />
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {item.detail}
+              </span>
+            </a>
+          ))}
+        </nav>
+      )}
+    </header>
+  )
+}
+export function AxonFooter() {
+  return (
+    <footer className="footer axon-footer container-shell">
+      <div className="footer-top">
+        <div>
+          <Logo />
+          <p className="mt-5 max-w-60 text-sm text-muted-foreground">
+            The permission layer for an agentic Ethereum.
+          </p>
+          <span className="eyebrow mt-5 block">Autonomy, with boundaries.</span>
+        </div>
+        {[
+          {
+            title: "Protocol",
+            links: [
+              ["Architecture", "/#architecture"],
+              ["Alt mempool", "/#alt-mempool"],
+              ["Permissions", "/#permissions"],
+              ["Guardrails", "/#guardrails"],
+            ],
+          },
+          {
+            title: "Build",
+            links: [
+              ["Technical overview", "/docs"],
+              ["Policy playground", "/#playground"],
+              ["Integration model", "/#developers"],
+              ["Design system", "/design-system"],
+            ],
+          },
+          {
+            title: "Foundations",
+            links: [
+              ["Live grants", "/docs#grants"],
+              ["Scoped authority", "/docs#scope"],
+              ["Protocol checks", "/docs#protocol"],
+              ["Revocation", "/docs#revocation"],
+            ],
+          },
+        ].map((group) => (
+          <div key={group.title}>
+            <h3 className="text-sm">{group.title}</h3>
+            {group.links.map(([name, href]) => (
+              <a key={name} href={href}>
+                {name}
+              </a>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="footer-bottom">
+        <span>© {new Date().getFullYear()} Axon</span>
+        <span>Agent-native permissions. Owner-defined authority.</span>
+        <a href="/design-system" style={{ display: "inline", margin: 0 }}>
+          Design system <ArrowUpRight size={12} className="inline" />
+        </a>
+      </div>
+    </footer>
+  )
+}
