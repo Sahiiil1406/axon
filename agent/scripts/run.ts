@@ -6,7 +6,7 @@
  *   npx tsx scripts/run.ts --amount 0.02 --submit         # send to the alt mempool
  *   npx tsx scripts/run.ts --amount 0.6 --self-correct    # shrink to the budget and retry
  *   npx tsx scripts/run.ts --action AgentVault.withdraw --to 0x… --amount 0.01
- *   npx tsx scripts/run.ts --emit ../web/data/runs.json --append
+ *   npx tsx scripts/run.ts --emit ../final/data/runs.json --append
  *
  * The default is dry-run: it builds and signs an intent, simulates it, and
  * explains what would happen. Nothing is sent unless `--submit` is passed.

@@ -1,3 +1,4 @@
+import { AsciiSharks } from "@/components/ascii-sharks"
 import { SiteLink } from "@/components/site-link"
 import { useState } from "react"
 import {
@@ -108,8 +109,7 @@ function Hero() {
     <section className="axon-hero cornered" aria-labelledby="hero-title">
       <CornerMarkers />
       <div className="hero-art" aria-hidden="true">
-        <div className="hero-grain" />
-        <div className="hero-orbit" />
+        <AsciiSharks className="hero-sharks" overlayClassName="hero-sharks-tinted" />
       </div>
       <SiteLink href="/docs" className="axon-announcement">
         <span className="status-dot" /> BUILT FOR AGENTIC ETHEREUM{" "}

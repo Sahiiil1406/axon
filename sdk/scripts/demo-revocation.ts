@@ -15,7 +15,7 @@
  * The main demo account is never touched.
  *
  *   npx tsx scripts/demo-revocation.ts
- *   npx tsx scripts/demo-revocation.ts --no-submit --emit ../web/data/revocation.json
+ *   npx tsx scripts/demo-revocation.ts --no-submit --emit ../final/data/revocation.json
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -362,7 +362,7 @@ async function main(): Promise<void> {
     prepared: { mirror: preparedMirror.raw, live: preparedLive.raw },
   };
 
-  const emit = resolve(ROOT, value("--emit", "web/data/revocation.json")!);
+  const emit = resolve(ROOT, value("--emit", "final/data/revocation.json")!);
   mkdirSync(dirname(emit), { recursive: true });
   writeFileSync(emit, `${JSON.stringify(body, null, 2)}\n`);
   console.log(`\nwrote ${emit}`);
