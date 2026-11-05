@@ -7,23 +7,20 @@ import { cn } from "@/lib/utils"
 export function Logo() {
   return (
     <SiteLink href="/" className="brand axon-brand" aria-label="Axon home">
-      <svg viewBox="0 0 40 40" aria-hidden="true" fill="none">
+      <svg
+        width="40"
+        height="40"
+        viewBox="0 0 406 488"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path d="M203 0L378.803 366H27.1968L203 0Z" fill="#1B5C6C" />
         <path
-          d="M8 30 20 7l12 23M13 22h14"
-          stroke="currentColor"
-          strokeWidth="3.5"
-          strokeLinecap="square"
-          strokeLinejoin="miter"
+          d="M363 270C274.911 270 203.5 336.262 203.5 418C203.5 336.262 132.089 270 44 270C132.089 270 203.5 155.385 203.5 14C203.5 155.385 274.911 270 363 270Z"
+          fill="#8ECED0"
         />
-        <path
-          d="m5 14 8 4m14 0 8-4M20 28v8"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <circle cx="5" cy="14" r="2" fill="currentColor" />
-        <circle cx="35" cy="14" r="2" fill="currentColor" />
-        <circle cx="20" cy="36" r="2" fill="currentColor" />
       </svg>
+
       <span>AXON</span>
     </SiteLink>
   )

@@ -1,3 +1,4 @@
+import { MOVEMENT_LABELS } from "./permissions";
 /**
  * Draws the World as a grid of ASCII cells:
  *   1. a pure black cell grid
@@ -247,28 +248,8 @@ function inTriangle(
   return !(neg && pos);
 }
 
-/** Visible dark-grey cell grid, snapped to device pixels. Shared with the sidebar backdrop. */
-export function paintGrid(g: CanvasRenderingContext2D, W: number, H: number, cw: number, ch: number, dpr: number) {
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.strokeStyle = "rgba(255,255,255,0.012)";
-  g.lineWidth = 1;
-  g.beginPath();
-  for (let c = 0; c <= Math.ceil(W / cw); c++) {
-    const x = Math.round(c * cw * dpr) + 0.5;
-    g.moveTo(x, 0);
-    g.lineTo(x, H * dpr);
-  }
-  for (let r = 0; r <= Math.ceil(H / ch); r++) {
-    const y = Math.round(r * ch * dpr) + 0.5;
-    g.moveTo(0, y);
-    g.lineTo(W * dpr, y);
-  }
-  g.stroke();
-}
-
 export class AsciiRenderer {
   private hoverTarget: Fish | Shark | null = null;
-  private hoverPointer = { x: -Infinity, y: -Infinity };
   private ctx: CanvasRenderingContext2D;
   private bg: HTMLCanvasElement;
   private dpr = 1;
@@ -292,6 +273,7 @@ export class AsciiRenderer {
   private dotStyles: string[] = [];
 
   private sharkFlag = new Uint8Array(0);
+  private sharkOwner = new Int32Array(0);
   private sharkShade = new Float32Array(0);
   private sharkKey = new Uint32Array(0);
   private sharkDepth = new Float32Array(0);
@@ -376,6 +358,7 @@ export class AsciiRenderer {
       this.bucketOf = new Uint8Array(n);
       this.bucketOrder = new Int32Array(n);
       this.sharkFlag = new Uint8Array(n);
+      this.sharkOwner = new Int32Array(n);
       this.sharkShade = new Float32Array(n);
       this.sharkKey = new Uint32Array(n);
       this.sharkDepth = new Float32Array(n);
@@ -398,11 +381,11 @@ export class AsciiRenderer {
   private paintBackground() {
     const g = this.bg.getContext("2d");
     if (!g) return;
-    const { width: W, height: H, dpr, cw, ch } = this;
+    const { width: W, height: H, dpr } = this;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = "#000";
     g.fillRect(0, 0, W, H);
-    paintGrid(g, W, H, cw, ch, dpr);
+
   }
 
   render(world: World, dt: number) {
@@ -435,38 +418,13 @@ export class AsciiRenderer {
   /** Track the selected swimmer without pausing or changing the simulation. */
   private drawHoverMarker(world: World) {
     const pointer = world.pointer;
-    if (!pointer.active) {
-      this.hoverTarget = null;
-      this.hoverPointer.x = -Infinity;
-      return;
-    }
-    const moved = Math.hypot(pointer.x - this.hoverPointer.x, pointer.y - this.hoverPointer.y) > 4;
-    if (moved || !this.hoverTarget) {
-      this.hoverPointer = { x: pointer.x, y: pointer.y };
-      this.hoverTarget = null;
-      // Test the shark's spine rather than its entire rectangular bounds.
-      for (const shark of [...world.sharks].reverse()) {
-        const radius = Math.max(this.ch, shark.length * 0.13);
-        for (let i = 0; i < shark.nodes.length - 2; i += 2) {
-          const x = shark.nodes[i], y = shark.nodes[i + 1];
-          const dx = shark.nodes[i + 2] - x, dy = shark.nodes[i + 3] - y;
-          const t = clamp(((pointer.x - x) * dx + (pointer.y - y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
-          if (Math.hypot(pointer.x - x - t * dx, pointer.y - y - t * dy) < radius) {
-            this.hoverTarget = shark;
-            break;
-          }
-        }
-        if (this.hoverTarget) break;
-      }
-      if (!this.hoverTarget) {
-        let nearest = Math.max(this.cw, this.ch);
-        for (const fish of world.fish) {
-          if (!fish.alive) continue;
-          const distance = Math.hypot(pointer.x - fish.x, pointer.y - fish.y);
-          if (distance < nearest) { nearest = distance; this.hoverTarget = fish; }
-        }
-      }
-    }
+    // Recheck the actual rendered body cell every frame. Never retain a tooltip
+    // after a swimmer moves away or the pointer moves onto a ripple/edge dot.
+    const cell = pointer.active ? this.cellIndex(pointer.x, pointer.y) : -1;
+    const flag = cell >= 0 ? this.sharkFlag[cell] : 0;
+    this.hoverTarget = flag && flag !== FLAG_EDGE
+      ? world.sharks.find(shark => shark.id === this.sharkOwner[cell]) ?? null
+      : null;
     const target = this.hoverTarget;
     if (!target) return;
     let left: number, right: number, top: number, bottom: number;
@@ -517,7 +475,8 @@ export class AsciiRenderer {
       ? [["IDENTITY", "Human / owner wallet"], ["AUTHORITY", "Direct EOA signature"], ["PERMISSION", "Owner-authorized call"], ["DELEGATION", "None"], ["EXECUTION", "Manual approval"]]
       : [["IDENTITY", "Delegated agent"], ["PERMISSION", profile.action], ["SCOPE", profile.scope], ["BUDGET", profile.budget], ["GUARDRAILS", "Live grant + expiry"]];
     const width = Math.min(272, this.width - 24);
-    const height = 158;
+    rows.push(["MOVEMENT", MOVEMENT_LABELS["nodes" in target ? "unrestricted" : target.movementPolicy]]);
+    const height = 176;
     const gap = 16;
     const fitsRight = bounds.right + gap + width < this.width - 12;
     const x = clamp(fitsRight ? bounds.right + gap : bounds.left - gap - width, 12, this.width - width - 12);
@@ -552,7 +511,7 @@ export class AsciiRenderer {
     });
     ctx.fillStyle = "rgba(255,255,255,0.46)";
     ctx.font = `500 8px ${this.fontFamily}`;
-    ctx.fillText("ILLUSTRATIVE IDENTITY / POLICY", x + 12, y + 145);
+    ctx.fillText("ILLUSTRATIVE IDENTITY / POLICY", x + 12, y + 163);
     ctx.restore();
   }
 
@@ -777,6 +736,7 @@ export class AsciiRenderer {
   private rasterizeSharks(sharks: Shark[], t: number) {
     const { sharkFlag, sharkShade, sharkKey, sharkDepth, sharkKind, sharkShadow, spine, arc, cw, ch, cols, rows } = this;
     sharkFlag.fill(0);
+    this.sharkOwner.fill(-1);
     sharkShadow.fill(0);
 
     for (const sh of sharks) {
@@ -861,6 +821,7 @@ export class AsciiRenderer {
           // Body-anchored key so each glyph rides along with the skin.
           const key = (hash3(Math.round(s * 52), Math.round(v / (cw * 0.9)), sh.id) * 4294967295) >>> 0;
           sharkKey[i] = key;
+          this.sharkOwner[i] = sh.id;
           sharkDepth[i] = sh.depth;
           sharkKind[i] = kindIndex;
 
@@ -931,17 +892,9 @@ export class AsciiRenderer {
         glyph = SKIN_RAMP[clamp(Math.floor((1 - shade) * 8.99) + jitter, 0, SKIN_RAMP.length - 1)];
       }
       level *= dim;
-      // Tinted per species; the classic tint is a cool blue-grey, like a back seen through deep water.
-      ctx.fillStyle = `rgb(${Math.min(255, Math.round(level * tr))},${Math.min(255, Math.round(level * tg))},${Math.min(255, Math.round(level * tb + 4))})`;
-      ctx.fillRect(x + 1, y + 1, cw - 1, ch - 1);
-
-      let color: string;
-      if (flag === FLAG_EYE) color = "#9aa0ad";
-      else if (flag === FLAG_MARK) color = `rgb(${Math.round(70 * tr)},${Math.round(70 * tg)},${Math.round(70 * tb)})`;
-      else if (roll < 0.09) color = ACCENTS[key % ACCENTS.length];
-      else if (roll < 0.13) color = "#ffffff";
-      else color = shade > 0.55 ? "#0e0f13" : "#1b1d24";
-      ctx.fillStyle = color;
+      // Draw only the glyph: no cell fills or tile outlines behind the shark.
+      const brightness = Math.max(95, level);
+      ctx.fillStyle = flag === FLAG_EYE ? "#ffffff" : `rgb(${Math.min(255, Math.round(brightness * tr))},${Math.min(255, Math.round(brightness * tg))},${Math.min(255, Math.round(brightness * tb + 4))})`;
       ctx.fillText(glyph, x + cw / 2, y + ch / 2 + 1);
     }
   }

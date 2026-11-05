@@ -2161,7 +2161,7 @@ body {
   content: "";
   position: absolute;
   inset: var(--hero-frame-gap) var(--hero-panel-inset);
-  background: linear-gradient(120deg, var(--axon-mint), var(--axon-aqua) 30%, var(--axon-cyan) 64%, var(--axon-blue));
+  background: color-mix(in srgb, var(--axon-cyan) 4%, var(--background));
 }
 .axon-hero .hero-sharks,
 .axon-hero .hero-sharks-tinted {
@@ -2183,9 +2183,9 @@ body {
 }
 .axon-hero .hero-sharks-tinted {
   clip-path: inset(var(--hero-frame-gap) var(--hero-panel-inset));
-  filter: grayscale(1) invert(1);
-  mix-blend-mode: multiply;
-  opacity: 0.55;
+  filter: grayscale(1) sepia(1) saturate(5) hue-rotate(125deg);
+  mix-blend-mode: screen;
+  opacity: 0.9;
 }
 @media (max-width: 767px) {
   .axon-hero > .hero-art { --hero-panel-inset: 8px; }
@@ -2243,4 +2243,35 @@ body {
   .axon-header .nav-dropdown a,
   .axon-header .nav-dropdown a svg { transition: none; }
   .nav-dropdown-content { animation: none; }
+}
+
+/* The permission zone stays neutral; only swimmers within it take the cyan tint. */
+.axon-hero {
+  color: var(--foreground);
+  background: var(--background);
+}
+.axon-hero::before { background: none; }
+.axon-hero .axon-announcement {
+  color: var(--foreground);
+  border-color: var(--border);
+  background: #ffffff05;
+}
+.axon-hero .axon-announcement .status-dot { background: var(--axon-mint); }
+.axon-hero .announcement-divider { background: var(--border); }
+.axon-hero .hero-docs { color: var(--foreground); border-color: var(--border); }
+.axon-hero a.bg-secondary { background: var(--axon-mint); color: #151414; border-color: var(--axon-mint); }
+.axon-hero a.bg-secondary:hover { background: var(--axon-aqua); }
+.axon-hero .hero-signal > span { background: linear-gradient(90deg, transparent, #ffffff60); }
+
+.axon-hero > .corner-marker {
+  background: var(--axon-cyan);
+  border-color: var(--axon-cyan);
+}
+
+/* A quiet cyan outline ties the permission zone to its corner anchors. */
+.axon-hero {
+  border-color: transparent;
+}
+.axon-hero > .hero-art::before {
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--axon-cyan) 15%, transparent);
 }

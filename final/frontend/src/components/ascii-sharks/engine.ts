@@ -71,6 +71,13 @@ export class OceanEngine {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.renderer.resize(rect.width, rect.height, dpr);
     this.world.resize(rect.width, rect.height, this.renderer.cellWidth, this.renderer.cellHeight);
+    const zone = this.canvas.closest(".axon-hero")?.getBoundingClientRect();
+    this.world.setPermissionBounds(zone ? {
+      left: zone.left - rect.left,
+      right: zone.right - rect.left,
+      top: zone.top - rect.top,
+      bottom: zone.bottom - rect.top,
+    } : null, Math.max(this.renderer.cellWidth, this.renderer.cellHeight));
     if (this.reducedMotion.matches) this.drawStill();
   }
 

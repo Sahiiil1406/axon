@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test:console": "node --test test/console-api.test.mjs",
-    "test:fixture": "node test/console-fixture.mjs"
+    "test:fixture": "node test/console-fixture.mjs",
+    "test:ocean": "node --test test/ocean-permissions.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

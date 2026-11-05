@@ -33,6 +33,16 @@ remain available for advanced canvas usage.
 
 Original ASCII sharks code by drewdi, MIT licensed; see [LICENSE](./LICENSE).
 
-Hovering a swimmer reveals tracking corner brackets and a following identity card.
+Hovering a large shark glyph reveals tracking corner brackets and a following identity card.
+Small schooling fish and water ripple dots do not trigger hover details.
 Agent and human profiles, permissions, scopes, and budgets are illustrative hero
 content, not live wallet or registry data. The swimmers keep moving while selected.
+
+The hero also acts as a spatial permission zone. Fish are split into three stable
+cohorts: confined to cyan, denied cyan entry, or unrestricted. Restricted fish
+reflect at the zone edges; respawns and resizing obey the same rules. The zone is
+measured from the actual hero element, so desktop and mobile margins stay aligned.
+Sharks remain unrestricted. Each hover card includes its movement policy.
+Outside the hero, the reusable component has no permission zone.
+
+Run collision checks with `npm run test:ocean` from the frontend directory.

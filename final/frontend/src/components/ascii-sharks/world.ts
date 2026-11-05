@@ -1,3 +1,4 @@
+import { enforceMovement, type MovementPolicy, type PermissionBounds } from "./permissions";
 /**
  * Artificial-life sim for the hero: tiny fish schools and the sharks that hunt them.
  *
@@ -32,6 +33,7 @@ const DEFAULT_SHARKS: SharkSpec[] = [
 ];
 
 export interface Fish {
+  movementPolicy: MovementPolicy;
   x: number;
   y: number;
   vx: number;
@@ -89,6 +91,8 @@ export class World {
   width = 0;
   height = 0;
   time = 0;
+  permissionBounds: PermissionBounds | null = null;
+  private boundaryPadding = 8;
   fish: Fish[] = [];
   sharks: Shark[] = [];
   events: WorldEvent[] = [];
@@ -193,6 +197,7 @@ export class World {
       const dir = (Math.random() < 0.5 ? 0 : Math.PI) + rand(-0.5, 0.5);
       for (let k = 0; k < size; k++) {
         this.fish.push({
+          movementPolicy: (["confined", "excluded", "unrestricted"] as const)[this.fish.length % 3],
           x: cx + rand(-1, 1) * this.sepX[species] * Math.sqrt(size),
           y: cy + rand(-1, 1) * this.sepY[species] * Math.sqrt(size) * 0.6,
           vx: Math.cos(dir) * sp.cruise,
@@ -209,6 +214,12 @@ export class World {
       }
     }
     this.bucketNext = new Int32Array(this.fish.length);
+  }
+
+  setPermissionBounds(bounds: PermissionBounds | null, padding = 8) {
+    this.permissionBounds = bounds;
+    this.boundaryPadding = padding;
+    if (bounds) for (const fish of this.fish) enforceMovement(fish, fish.movementPolicy, bounds, undefined, padding);
   }
 
   splash(x: number, y: number) {
@@ -454,8 +465,10 @@ export class World {
       }
       f.turn += (angleDiff(before, Math.atan2(f.vy, f.vx)) / dt - f.turn) * Math.min(1, dt * 8);
       f.phase += dt * (7 + Math.hypot(f.vx, f.vy) * 0.12);
+      const previous = { x: f.x, y: f.y };
       f.x = clamp(f.x + f.vx * dt, -60, W + 60);
       f.y = clamp(f.y + f.vy * dt, -60, H + 60);
+      if (this.permissionBounds) enforceMovement(f, f.movementPolicy, this.permissionBounds, previous, this.boundaryPadding);
     }
   }
 
@@ -661,6 +674,7 @@ export class World {
       f.y = y + rand(-1, 1) * this.perception;
       f.vx = Math.cos(inward) * sp.cruise * 1.4;
       f.vy = Math.sin(inward) * sp.cruise * 1.4;
+      if (this.permissionBounds) enforceMovement(f, f.movementPolicy, this.permissionBounds, undefined, this.boundaryPadding);
     }
   }
 }
