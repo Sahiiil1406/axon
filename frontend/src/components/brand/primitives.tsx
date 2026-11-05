@@ -1,0 +1,154 @@
+import type { ReactNode } from "react"
+import { ArrowUpRight } from "lucide-react"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+export function Logo() {
+  return (
+    <a href="/" className="brand axon-brand" aria-label="Axon home">
+      <svg viewBox="0 0 40 40" aria-hidden="true" fill="none">
+        <path
+          d="M8 30 20 7l12 23M13 22h14"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="square"
+          strokeLinejoin="miter"
+        />
+        <path
+          d="m5 14 8 4m14 0 8-4M20 28v8"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <circle cx="5" cy="14" r="2" fill="currentColor" />
+        <circle cx="35" cy="14" r="2" fill="currentColor" />
+        <circle cx="20" cy="36" r="2" fill="currentColor" />
+      </svg>
+      <span>AXON</span>
+    </a>
+  )
+}
+export function ActionLink({
+  href,
+  children,
+  variant = "default",
+  className,
+}: {
+  href: string
+  children: ReactNode
+  variant?: "default" | "outline" | "secondary"
+  className?: string
+}) {
+  return (
+    <a
+      href={href}
+      className={cn(buttonVariants({ variant, size: "lg" }), className)}
+    >
+      {children}
+    </a>
+  )
+}
+export function TextLink({
+  href,
+  children,
+}: {
+  href: string
+  children: ReactNode
+}) {
+  return (
+    <a className="text-link" href={href}>
+      {children}
+      <ArrowUpRight size={16} />
+    </a>
+  )
+}
+export function SectionHeading({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow?: string
+  title: string
+  children?: ReactNode
+}) {
+  return (
+    <div className="section-heading">
+      {eyebrow && <div className="eyebrow mb-5">{eyebrow}</div>}
+      <h2 className="section-title">{title}</h2>
+      {children && <p className="body-copy">{children}</p>}
+    </div>
+  )
+}
+export function FeatureCard({
+  icon,
+  title,
+  children,
+  href,
+}: {
+  icon: ReactNode
+  title: string
+  children: ReactNode
+  href?: string
+}) {
+  return (
+    <article className="surface feature">
+      <div className="text-primary">{icon}</div>
+      <h3>{title}</h3>
+      <p className="body-copy text-sm">{children}</p>
+      {href && <TextLink href={href}>Explore {title.toLowerCase()}</TextLink>}
+    </article>
+  )
+}
+export function Globe() {
+  return (
+    <div
+      className="globe"
+      role="img"
+      aria-label="Illustration of a distributed agent network"
+    >
+      <svg viewBox="0 0 500 500" fill="none">
+        <defs>
+          <radialGradient id="glow">
+            <stop stopColor="#68f2c2" />
+            <stop offset="1" stopColor="#31a6c0" />
+          </radialGradient>
+        </defs>
+        <g stroke="#59bfde" strokeOpacity=".25">
+          <circle cx="250" cy="250" r="245" />
+          {[65, 135, 200].map((r) => (
+            <ellipse key={r} cx="250" cy="250" rx={r} ry="245" />
+          ))}
+          {[75, 155, 250, 345, 425].map((y, i) => (
+            <ellipse
+              key={y}
+              cx="250"
+              cy={y}
+              rx={[175, 226, 245, 226, 175][i]}
+              ry="34"
+            />
+          ))}
+          <path
+            d="M70 150Q250 20 410 300M90 350Q180 100 400 140M150 430Q250 150 420 220"
+            stroke="#66ede3"
+            strokeOpacity=".9"
+          />
+        </g>
+        {Array.from({ length: 95 }, (_, i) => {
+          const a = i * 2.39996
+          const r = Math.sqrt(i / 95) * 225
+          return (
+            <circle
+              key={i}
+              cx={250 + Math.cos(a) * r}
+              cy={250 + Math.sin(a) * r * 0.85}
+              r={i % 7 === 0 ? 3 : 1.3}
+              fill="url(#glow)"
+              opacity={i % 3 === 0 ? 0.9 : 0.45}
+            />
+          )
+        })}
+        <circle cx="90" cy="350" r="5" fill="#68f2c2" />
+        <circle cx="400" cy="140" r="5" fill="#68f2c2" />
+      </svg>
+    </div>
+  )
+}
