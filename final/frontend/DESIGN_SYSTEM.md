@@ -46,3 +46,7 @@ Homepage technical statements are grounded in PermissionRegistry, AgentAccount, 
 ## Language
 
 Lead with owner authority and bounded agent autonomy. Explain the difference between an agent’s identity, its delegated authority and a protocol’s independent rules. Avoid invented adoption metrics and claims that a local policy preview proves transaction safety.
+
+## Transaction console
+
+`src/console/` contains the live workspace, separate from marketing pages. Its CSS is scoped to `.console-*` classes and loads only for `/app` routes. It reuses the Axon logo, button, border and corner-anchor primitives without changing the homepage. The sidebar, dense statistic strip, transaction tables, receipt definitions, permission editor and confirmation dialog retain the gray surfaces and five accent colors.

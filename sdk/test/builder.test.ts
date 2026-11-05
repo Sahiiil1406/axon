@@ -24,7 +24,7 @@ const ACCOUNT = "0x96a21935ddbf224d64efc933449016bbb4551a2e" as const;
 const intent: Intent = {
   target: "0x5ea0d228af152b987c0a05d71527609744128996",
   selector: "0xdf8879b8",
-  args: "0x" + "00".repeat(64),
+  args: `0x${"00".repeat(64)}` as const,
   value: 0n,
   spend: 10n ** 16n,
   nonce: 7n,

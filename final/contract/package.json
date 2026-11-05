@@ -1,0 +1,1 @@
+{"name":"@axon/final-contract","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","deploy":"npm run build && tsx scripts/deploy.ts"},"dependencies":{"viem":"^2.57.14"},"devDependencies":{"solc":"0.8.28","tsx":"^4.23.15"}}

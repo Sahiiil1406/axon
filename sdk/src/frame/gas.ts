@@ -1,4 +1,3 @@
-import { FRAME_TX_INTRINSIC_COST, FRAME_TX_PER_FRAME_COST } from "./gas.ts";
 import type { FrameTx, SignatureEntry } from "./types.ts";
 import { Scheme } from "./types.ts";
 

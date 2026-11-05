@@ -151,11 +151,12 @@ const intentNonce = (await publicClient.readContract({
   functionName: "intentNonce",
 })) as bigint;
 
-const amount = parseEther(argValue("--amount", "0.02")!);
+const amountEth = argValue("--amount", "0.02") ?? "0.02";
+const amount = parseEther(amountEth);
 // `spend` is the budget the intent claims, in the owner's unit. It normally
 // equals `amount`; the override exists to exercise the body-frame budget guard
 // without moving that much value.
-const spend = parseEther(argValue("--spend", argValue("--amount", "0.02")!));
+const spend = parseEther(argValue("--spend", amountEth) ?? amountEth);
 const minOut = (amount * 95n) / 100n; // oracle price 1e18, 5% max slippage
 const selector = toFunctionSelector("rebalance(uint256,uint256)");
 const args = encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [amount, minOut]);

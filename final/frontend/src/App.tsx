@@ -1,14 +1,29 @@
-import { useEffect } from "react"
+import { lazy, Suspense, useEffect } from "react"
 import { AxonHeader, AxonFooter } from "@/components/brand/axon-shell"
 import { AxonHome } from "@/pages/axon-home"
 import { DesignSystem } from "@/pages/design-system"
 import { Docs } from "@/pages/docs"
+const ConsoleApp = lazy(() => import("@/console/console-app"))
+
 export function App() {
   useEffect(() => {
     const id = decodeURIComponent(window.location.hash.slice(1))
     if (id) document.getElementById(id)?.scrollIntoView()
   }, [])
   const path = window.location.pathname.replace(/\/$/, "") || "/"
+  if (path === "/app" || path.startsWith("/app/")) {
+    return (
+      <Suspense
+        fallback={
+          <div className="p-8 text-sm text-muted-foreground" role="status">
+            Loading Axon console…
+          </div>
+        }
+      >
+        <ConsoleApp />
+      </Suspense>
+    )
+  }
   return (
     <>
       <a href="#main" className="sr-only focus:not-sr-only">
