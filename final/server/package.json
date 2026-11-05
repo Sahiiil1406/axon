@@ -1,0 +1,16 @@
+{
+  "name": "@axon/final",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "FinalCounter: one endpoint, different behavior for a human and a frame-transaction agent",
+  "scripts": {
+    "start": " node --loader tsx --no-warnings src/index.ts"
+  },
+  "dependencies": {
+    "viem": "^2.57.14"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}
