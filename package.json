@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@noble/curves": "^2.4.0",
-    "viem": "^2.57.16"
-  }
-}
