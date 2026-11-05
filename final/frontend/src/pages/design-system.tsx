@@ -1,3 +1,4 @@
+import { SiteLink } from "@/components/site-link"
 import { useState } from "react"
 import { ArrowRight, Check, Copy, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -32,13 +33,13 @@ export function DesignSystem() {
           "Components",
           "Patterns",
         ].map((n) => (
-          <a href={`#${n.toLowerCase()}`} key={n}>
+          <SiteLink href={`#${n.toLowerCase()}`} key={n}>
             {n}
-          </a>
+          </SiteLink>
         ))}
-        <a href="/" className="mt-5 text-primary">
+        <SiteLink href="/" className="mt-5 text-primary">
           ← Homepage
-        </a>
+        </SiteLink>
       </aside>
       <div>
         <section id="overview" className="ds-section pt-0">

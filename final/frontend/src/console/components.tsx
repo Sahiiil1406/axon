@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import type { AnchorHTMLAttributes, ReactNode } from "react"
 import { ArrowUpRight, Check, Copy, RefreshCw } from "lucide-react"
 import { useState } from "react"
@@ -9,31 +10,9 @@ import type { Tone } from "./types"
 
 export function ConsoleLink({
   href = "",
-  onClick,
   ...props
 }: AnchorHTMLAttributes<HTMLAnchorElement>) {
-  const { navigate } = useConsole()
-  return (
-    <a
-      {...props}
-      href={href}
-      onClick={(e) => {
-        onClick?.(e)
-        if (
-          !e.defaultPrevented &&
-          e.button === 0 &&
-          !e.metaKey &&
-          !e.ctrlKey &&
-          !e.shiftKey &&
-          !e.altKey &&
-          href.startsWith("/app")
-        ) {
-          e.preventDefault()
-          navigate(href)
-        }
-      }}
-    />
-  )
+  return <Link to={href} {...props} />
 }
 export function Badge({
   children,

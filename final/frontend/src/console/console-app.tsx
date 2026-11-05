@@ -1,3 +1,4 @@
+import { Link, Outlet, useLocation } from "react-router-dom"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
@@ -15,9 +16,6 @@ import { fetchConsoleState, submitCall, updatePermission } from "./api"
 import { failureReason } from "./format"
 import { ConsoleContext } from "./model"
 import { Badge, ConsoleLink, RefreshButton } from "./components"
-import { DemoPage } from "./demo-page"
-import { PermissionsPage } from "./permissions-page"
-import { ActivityPage, TransactionPage } from "./transactions"
 import type {
   CallResult,
   ConsoleState,
@@ -41,9 +39,8 @@ export default function ConsoleApp() {
   const [ownerTransactions, setOwnerTransactions] = useState<
     OwnerTransaction[]
   >([])
-  const [path, setPath] = useState(
-    () => window.location.pathname.replace(/\/$/, "") || "/app"
-  )
+  const { pathname } = useLocation()
+  const path = pathname.replace(/\/$/, "") || "/app"
   const requestVersion = useRef(0)
   const writing = useRef(false)
   const ingest = useCallback((next: ConsoleState) => {
@@ -73,23 +70,15 @@ export default function ConsoleApp() {
     }
   }, [ingest])
   useEffect(() => {
-    void refresh()
+    let mounted = true
+    queueMicrotask(() => { if (mounted) void refresh() })
     return () => {
+      mounted = false
+      // This ref is a request generation counter, not a DOM node.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       requestVersion.current++
     }
   }, [refresh])
-  useEffect(() => {
-    const listener = () =>
-      setPath(window.location.pathname.replace(/\/$/, "") || "/app")
-    window.addEventListener("popstate", listener)
-    return () => window.removeEventListener("popstate", listener)
-  }, [])
-  const navigate = useCallback((to: string) => {
-    window.history.pushState(null, "", to)
-    setNotice(null)
-    setPath(window.location.pathname.replace(/\/$/, "") || "/app")
-    window.scrollTo({ top: 0, behavior: "instant" })
-  }, [])
   const call = async (lane: Lane, fn: FunctionId, amount: string | null) => {
     if (writing.current || !state) return false
     writing.current = true
@@ -184,11 +173,6 @@ export default function ConsoleApp() {
       document.title = original
     }
   }, [path])
-  const known =
-    path === "/app" ||
-    path === "/app/permissions" ||
-    path === "/app/activity" ||
-    path.startsWith("/app/transactions/")
   const nav = [
     { href: "/app", label: "Overview", icon: LayoutDashboard },
     { href: "/app/permissions", label: "Permissions", icon: Settings2 },
@@ -208,7 +192,6 @@ export default function ConsoleApp() {
         call,
         permission,
         path,
-        navigate,
       }}
     >
       <div className="console-app">
@@ -236,9 +219,9 @@ export default function ConsoleApp() {
               {state ? `Block ${state.network.blockNumber}` : "Devnet"}
             </Badge>
           </div>
-          <a className="console-back" href="/">
+          <Link className="console-back" to="/">
             <ArrowLeft size={13} /> Back to site
-          </a>
+          </Link>
         </header>
         <div className="console-layout">
           <aside className="console-sidebar">
@@ -281,9 +264,9 @@ export default function ConsoleApp() {
               >
                 Devnet explorer <ArrowUpRight size={13} />
               </a>
-              <a href="/docs">
+              <Link to="/docs">
                 Protocol overview <FileText size={13} />
-              </a>
+              </Link>
             </div>
           </aside>
           <main id="console-main" className="console-main">
@@ -346,26 +329,7 @@ export default function ConsoleApp() {
                 server to return the transaction result.
               </div>
             )}
-            {known ? (
-              path === "/app" ? (
-                <DemoPage />
-              ) : path === "/app/permissions" ? (
-                <PermissionsPage />
-              ) : path === "/app/activity" ? (
-                <ActivityPage />
-              ) : (
-                <TransactionPage
-                  id={decodeURIComponent(
-                    path.slice("/app/transactions/".length)
-                  )}
-                />
-              )
-            ) : (
-              <div className="console-notfound">
-                <h1>Page not found</h1>
-                <ConsoleLink href="/app">Return to the console</ConsoleLink>
-              </div>
-            )}
+            <Outlet />
           </main>
         </div>
         <footer className="console-footer">

@@ -1,3 +1,4 @@
+import { SiteLink } from "@/components/site-link"
 import { useState } from "react"
 import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react"
 import { ActionLink, Logo } from "./primitives"
@@ -60,8 +61,8 @@ export function AxonHeader() {
             <ChevronDown size={12} />
           </button>
         ))}
-        <a href="/#guardrails">Guardrails</a>
-        <a href="/docs">Docs</a>
+        <SiteLink href="/#guardrails">Guardrails</SiteLink>
+        <SiteLink href="/docs">Docs</SiteLink>
       </nav>
       <div className="nav-actions">
         <span className="devnet-label">
@@ -89,7 +90,11 @@ export function AxonHeader() {
             ? Object.values(groups).flat()
             : (groups[open as keyof typeof groups] ?? [])
           ).map((item) => (
-            <a href={item.href} key={item.label} onClick={() => setOpen(null)}>
+            <SiteLink
+              href={item.href}
+              key={item.label}
+              onClick={() => setOpen(null)}
+            >
               <span className="flex justify-between">
                 {item.label}
                 <ArrowUpRight size={15} />
@@ -97,7 +102,7 @@ export function AxonHeader() {
               <span className="mt-1 block text-xs text-muted-foreground">
                 {item.detail}
               </span>
-            </a>
+            </SiteLink>
           ))}
         </nav>
       )}
@@ -147,9 +152,9 @@ export function AxonFooter() {
           <div key={group.title}>
             <h3 className="text-sm">{group.title}</h3>
             {group.links.map(([name, href]) => (
-              <a key={name} href={href}>
+              <SiteLink key={name} href={href}>
                 {name}
-              </a>
+              </SiteLink>
             ))}
           </div>
         ))}
@@ -157,9 +162,12 @@ export function AxonFooter() {
       <div className="footer-bottom">
         <span>© {new Date().getFullYear()} Axon</span>
         <span>Agent-native permissions. Owner-defined authority.</span>
-        <a href="/design-system" style={{ display: "inline", margin: 0 }}>
+        <SiteLink
+          href="/design-system"
+          style={{ display: "inline", margin: 0 }}
+        >
           Design system <ArrowUpRight size={12} className="inline" />
-        </a>
+        </SiteLink>
       </div>
     </footer>
   )

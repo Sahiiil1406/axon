@@ -1,3 +1,4 @@
+import { SiteLink } from "@/components/site-link"
 import { useState } from "react"
 import {
   ArrowRight,
@@ -110,11 +111,11 @@ function Hero() {
         <div className="hero-grain" />
         <div className="hero-orbit" />
       </div>
-      <a href="/docs" className="axon-announcement">
+      <SiteLink href="/docs" className="axon-announcement">
         <span className="status-dot" /> BUILT FOR AGENTIC ETHEREUM{" "}
         <span className="announcement-divider" /> EXPLORE THE PROTOCOL{" "}
         <ArrowUpRight size={13} />
-      </a>
+      </SiteLink>
       <h1 id="hero-title">
         Let agents act.
         <br />
@@ -129,9 +130,9 @@ function Hero() {
         <ActionLink href="#playground" variant="secondary">
           Explore the guardrails <ArrowRight size={16} />
         </ActionLink>
-        <a href="/docs" className="hero-docs">
+        <SiteLink href="/docs" className="hero-docs">
           Read the architecture <ArrowUpRight size={16} />
-        </a>
+        </SiteLink>
       </div>
       <div className="hero-signal">
         <span />
@@ -743,9 +744,9 @@ function Closing() {
         <ActionLink href="#playground" variant="secondary">
           Explore Axon <ArrowRight size={16} />
         </ActionLink>
-        <a href="/docs" className="hero-docs">
+        <SiteLink href="/docs" className="hero-docs">
           Read the docs <ArrowUpRight size={16} />
-        </a>
+        </SiteLink>
       </div>
       <span className="closing-mark">
         <SignalMark size={40} />

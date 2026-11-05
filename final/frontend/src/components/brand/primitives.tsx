@@ -1,3 +1,4 @@
+import { SiteLink } from "@/components/site-link"
 import type { ReactNode } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
@@ -5,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 export function Logo() {
   return (
-    <a href="/" className="brand axon-brand" aria-label="Axon home">
+    <SiteLink href="/" className="brand axon-brand" aria-label="Axon home">
       <svg viewBox="0 0 40 40" aria-hidden="true" fill="none">
         <path
           d="M8 30 20 7l12 23M13 22h14"
@@ -24,7 +25,7 @@ export function Logo() {
         <circle cx="20" cy="36" r="2" fill="currentColor" />
       </svg>
       <span>AXON</span>
-    </a>
+    </SiteLink>
   )
 }
 export function ActionLink({
@@ -39,12 +40,12 @@ export function ActionLink({
   className?: string
 }) {
   return (
-    <a
+    <SiteLink
       href={href}
       className={cn(buttonVariants({ variant, size: "lg" }), className)}
     >
       {children}
-    </a>
+    </SiteLink>
   )
 }
 export function TextLink({
@@ -55,10 +56,10 @@ export function TextLink({
   children: ReactNode
 }) {
   return (
-    <a className="text-link" href={href}>
+    <SiteLink className="text-link" href={href}>
       {children}
       <ArrowUpRight size={16} />
-    </a>
+    </SiteLink>
   )
 }
 export function SectionHeading({

@@ -20,7 +20,6 @@ export interface ConsoleModel {
   call: (lane: Lane, fn: FunctionId, amount: string | null) => Promise<boolean>
   permission: (input: PermissionInput) => Promise<boolean>
   path: string
-  navigate: (to: string) => void
 }
 export const ConsoleContext = createContext<ConsoleModel | null>(null)
 export function useConsole() {
