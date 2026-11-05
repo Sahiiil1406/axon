@@ -1,15 +1,25 @@
 {
-  "name": "sdk",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@axon/sdk",
+  "version": "0.1.0",
+  "description": "Axon EIP-8141 frame transaction client",
+  "main": "./src/index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.2"
+  },
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^1.5.0",
+    "viem": "^2.57.14"
   }
 }

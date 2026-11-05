@@ -1,3 +1,4 @@
+import { SiteLink } from "@/components/site-link"
 import { ArrowRight, KeyRound, Network, ShieldCheck } from "lucide-react"
 import { ActionLink } from "@/components/brand/primitives"
 import { ReferenceFrame } from "@/components/brand/reference-frame"
@@ -13,13 +14,13 @@ export function Docs() {
           ["Protocol rules", "protocol"],
           ["Revocation", "revocation"],
         ].map(([label, id]) => (
-          <a key={id} href={`#${id}`}>
+          <SiteLink key={id} href={`#${id}`}>
             {label}
-          </a>
+          </SiteLink>
         ))}
-        <a className="text-primary" href="/#playground">
+        <SiteLink className="text-primary" href="/#playground">
           Try the policy playground ↗
-        </a>
+        </SiteLink>
       </aside>
       <article>
         <section id="architecture" className="ds-section pt-0">

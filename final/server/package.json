@@ -5,12 +5,18 @@
   "type": "module",
   "description": "FinalCounter: one endpoint, different behavior for a human and a frame-transaction agent",
   "scripts": {
-    "start": " node --loader tsx --no-warnings src/index.ts"
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck"
   },
   "dependencies": {
-    "viem": "^2.57.14"
+    "viem": "^2.57.14",
+    "@axon/sdk": "file:../../sdk"
   },
   "devDependencies": {
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "@types/node": "^26.6.6",
+    "typescript": "~6.0.2"
   }
 }

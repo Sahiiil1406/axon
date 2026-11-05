@@ -1,0 +1,24 @@
+{
+  "chainId": 1337,
+  "network": "eip8141-altmempool-devnet",
+  "rpc": "https://altmempool.forshtat.com",
+  "sidecar": "https://altmempool.forshtat.com/rpc",
+  "registry": "0xe4a0ae628805ca2a1304b7b655aec991a0ad99ec",
+  "agentAccount": "0x96a21935ddbf224d64efc933449016bbb4551a2e",
+  "counter": "0x2eecd1b282d9fdc3cbe14ab10850c531c542d80f",
+  "owner": "0x0b012EEfCff398daB58e418d85e30398346a5c51",
+  "agentKey": "0x09c57921D33232f7B5bf1cFB0B3C2a084eE900a9",
+  "grantHash": "0x4da630247a9a0a44f5c852be04bf62c1997f0a528786f10aeae34cb6c827554f",
+  "grantActive": false,
+  "budgetPerEpoch": "10000000000000000",
+  "human": {
+    "step": 1,
+    "price": "1000000000000000"
+  },
+  "agent": {
+    "step": 10,
+    "price": "100000000000000"
+  },
+  "deployTx": "0x88c42565d925542465743c434b5fa33a7d4d87775db0e65454776ccf21b8f139",
+  "deployedAt": "2026-11-05T20:58:49.918Z"
+}

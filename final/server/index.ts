@@ -14,7 +14,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,52 +25,76 @@ import {
   formatEther,
   http,
   parseEther,
+  parseAbi,
+  isAddress,
   toFunctionSelector,
   type Abi,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { AxonClient } from "../sdk/src/index.ts";
+import { AxonClient } from "@axon/sdk";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(HERE, "..");
-const WEB = resolve(HERE, "web");
-process.loadEnvFile(resolve(ROOT, ".env"));
+const WEB = resolve(ROOT, "frontend/dist");
+const envFile = [resolve(HERE, ".env"), resolve(ROOT, ".env"), resolve(ROOT, "../.env")].find(existsSync);
+if (envFile) process.loadEnvFile(envFile);
 
-const deployment = JSON.parse(
-  readFileSync(resolve(HERE, "deployments.json"), "utf8"),
-) as {
-  chainId: number;
-  rpc: string;
-  sidecar: string;
-  registry: Address;
-  agentAccount: Address;
-  counter: Address;
-  owner: Address;
-  agentKey: Address;
-};
+interface Deployment {
+  chainId?: number;
+  rpc?: string;
+  sidecar?: string;
+  registry?: Address;
+  agentAccount?: Address;
+  counter?: Address;
+}
+const deploymentFile = process.env.FINAL_DEPLOYMENTS_FILE ?? [
+  resolve(ROOT, "deployment.json"),
+  resolve(ROOT, "contract/deployments.json"),
+  resolve(HERE, "deployments.json"),
+  resolve(ROOT, "deployments.json"),
+].find(existsSync);
+const deployment: Deployment = deploymentFile
+  ? JSON.parse(readFileSync(deploymentFile, "utf8")) as Deployment
+  : {};
 
-const artifact = JSON.parse(
-  readFileSync(resolve(HERE, "out/FinalCounter.sol/FinalCounter.json"), "utf8"),
-) as { abi: Abi };
-const counterAbi = artifact.abi;
+// The server only needs this public ABI; running it does not require a Foundry build.
+const counterAbi = parseAbi([
+  "function snapshot() view returns (uint256 humanCount, uint256 agentCount, uint256 humanPaid, uint256 agentPaid, uint256 humanPayments, uint256 agentPayments, uint8 lastLane, address lastCaller)",
+  "function HUMAN_PRICE() view returns (uint256)",
+  "function AGENT_PRICE() view returns (uint256)",
+  "function increment() returns (uint8 lane, uint256 step)",
+  "function pay() payable returns (uint8 lane, uint256 step)",
+  "function payAmount(uint256 amount) payable returns (uint8 lane, uint256 step)",
+]);
 
 const RPC = process.env.RPC ?? deployment.rpc;
 const SIDECAR = process.env.SIDECAR ?? deployment.sidecar;
-const CHAIN_ID = Number(deployment.chainId ?? 1337);
-const PORT = Number(process.env.FINAL_PORT ?? 8900);
-const HOST = process.env.FINAL_HOST ?? "127.0.0.1";
+if (!RPC) throw new Error("RPC is required in the server environment or deployment file");
+if (!SIDECAR) throw new Error("SIDECAR is required in the server environment or deployment file");
+const CHAIN_ID = Number(process.env.CHAIN_ID ?? deployment.chainId ?? 1337);
+const PORT = Number(process.env.FINAL_PORT ?? process.env.PORT ?? 8900);
+const HOST = process.env.FINAL_HOST ?? process.env.HOST ?? "127.0.0.1";
+if (!Number.isSafeInteger(CHAIN_ID) || CHAIN_ID <= 0) throw new Error("CHAIN_ID must be a positive integer");
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("FINAL_PORT must be between 1 and 65535");
 const EXPLORER = "https://altmempoolexplorer.forshtat.com/tx/";
 
-const OWNER_PK = process.env.DEPLOYER_PRIVATE_KEY as Hex | undefined;
-const AGENT_PK = process.env.AGENT_PRIVATE_KEY as Hex | undefined;
-if (!OWNER_PK) throw new Error("DEPLOYER_PRIVATE_KEY is required");
-if (!AGENT_PK) throw new Error("AGENT_PRIVATE_KEY is required");
-
-const COUNTER = deployment.counter;
-const REGISTRY = deployment.registry;
-const ACCOUNT = deployment.agentAccount;
+function privateKey(name: string): Hex {
+  const value = process.env[name];
+  if (!value || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${name} must be a 32-byte private key`);
+  return value as Hex;
+}
+function address(name: string, fallback?: Address): Address {
+  const value = process.env[name] ?? fallback;
+  if (!value || !isAddress(value)) throw new Error(`${name} must be a valid deployed contract address`);
+  return value;
+}
+const OWNER_PK = privateKey("DEPLOYER_PRIVATE_KEY");
+const AGENT_PK = privateKey("AGENT_PRIVATE_KEY");
+const COUNTER = address("FINAL_COUNTER_ADDRESS", deployment.counter);
+const REGISTRY = address("REGISTRY_ADDRESS", deployment.registry);
+const ACCOUNT = address("ACCOUNT_ADDRESS", deployment.agentAccount);
 
 const chain = {
   id: CHAIN_ID,
@@ -438,7 +462,7 @@ async function readState() {
       registry: REGISTRY,
       agentAccount: ACCOUNT,
       owner: owner.address,
-      agentKey: deployment.agentKey,
+      agentKey: agentClient.agentAddress,
     },
     counter,
     grant: serializeGrant(
@@ -840,10 +864,12 @@ function serveStatic(
   pathname: string,
 ) {
   let path = pathname;
-  if (path === "/" || path === "/demo" || path === "/demo/")
-    path = "/index.html";
-  if (path === "/permissions" || path === "/permissions/")
-    path = "/permissions.html";
+  if (path === "/demo" || path === "/demo/" || path === "/permissions" || path === "/permissions/") {
+    res.writeHead(302, { location: path.startsWith("/permissions") ? "/app/permissions" : "/app" });
+    res.end();
+    return;
+  }
+  if (path === "/" || path === "/app" || path.startsWith("/app/") || path === "/docs" || path === "/docs/" || path === "/design-system" || path === "/design-system/") path = "/index.html";
 
   const file = resolve(WEB, `.${path}`);
   if (file !== WEB && !file.startsWith(`${WEB}${sep}`)) {
@@ -952,6 +978,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  counter          ${COUNTER}`);
   console.log(`  agent account    ${ACCOUNT}`);
   console.log(`  registry         ${REGISTRY}`);
-  console.log(`  permissions      http://localhost:${PORT}/permissions`);
-  console.log(`  rpc              ${RPC}`);
+  console.log(`  console          http://localhost:${PORT}/app`);
+  console.log(`  permissions      http://localhost:${PORT}/app/permissions`);
+  console.log(`  rpc host         ${new URL(RPC).hostname}`);
 });

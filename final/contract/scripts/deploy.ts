@@ -1,13 +1,13 @@
 /**
  * Deploy FinalCounter to the alt-mempool devnet and wire the agent allowlist.
  *
- *   cd final && npx tsx scripts/deploy.ts
+ *   cd final/contract && npm run deploy
  *
  * The devnet's `eth_estimateGas` does not include EIP-8037 state gas for code
  * deposit, so every deployment uses a fixed, generous limit (same workaround as
  * `sdk/scripts/deploy.ts`).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   createPublicClient,
@@ -34,7 +34,7 @@ if (!REGISTRY) throw new Error("REGISTRY_ADDRESS is required");
 if (!ACCOUNT) throw new Error("ACCOUNT_ADDRESS is required");
 
 const chain = {
-  id: 1337,
+  id: Number(process.env.CHAIN_ID ?? 1337),
   name: "eip8141-devnet",
   nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [RPC] } },
@@ -101,6 +101,9 @@ const REGISTRY_ABI = [
 ] as const satisfies Abi;
 
 const { abi, bytecode } = artifact();
+if (await publicClient.getChainId() !== chain.id) throw new Error("RPC chain ID mismatch");
+const initialGrant = await publicClient.readContract({address: REGISTRY, abi: REGISTRY_ABI, functionName: "current", args: [ACCOUNT]});
+if (initialGrant.owner.toLowerCase() !== deployer.address.toLowerCase()) throw new Error("Deployer does not own the agent grant");
 
 console.log("deployer ", deployer.address);
 console.log("registry ", REGISTRY);
@@ -124,7 +127,7 @@ if (receipt.status !== "success" || receipt.contractAddress == null) {
 const counter = receipt.contractAddress;
 console.log("counter  ", counter, `(${receipt.gasUsed} gas)`);
 
-// Make the two endpoints callable by the agent account. Each `allow` bumps the
+// Make the three endpoints callable by the agent account. Each `allow` bumps the
 // grant hash, so read the hash again before the agent builds an intent.
 for (const signature of ["increment()", "pay()", "payAmount(uint256)"]) {
   const selector = toFunctionSelector(signature);
@@ -194,7 +197,7 @@ const agentPrice = (await publicClient.readContract({
 })) as bigint;
 
 const record = {
-  chainId: 1337,
+  chainId: chain.id,
   network: "eip8141-altmempool-devnet",
   rpc: RPC,
   sidecar: process.env.SIDECAR ?? "https://altmempool.forshtat.com/rpc",
@@ -212,16 +215,18 @@ const record = {
   deployedAt: new Date().toISOString(),
 };
 
-writeFileSync(resolve(ROOT, "final/deployments.json"), `${JSON.stringify(record, null, 2)}\n`);
-console.log("wrote    ", resolve(ROOT, "final/deployments.json"));
+writeFileSync(resolve(ROOT, "deployment.json"), `${JSON.stringify(record, null, 2)}\n`);
+console.log("wrote    ", resolve(ROOT, "deployment.json"));
 
-const envPath = resolve(ROOT, ".env");
+for (const envPath of [resolve(ROOT, ".env"), resolve(ROOT, "server/.env"), resolve(ROOT, "../.env")]) {
+if (!existsSync(envPath)) continue;
 let env = readFileSync(envPath, "utf8");
 env = env.match(/^FINAL_COUNTER_ADDRESS=.*$/m)
   ? env.replace(/^FINAL_COUNTER_ADDRESS=.*$/m, `FINAL_COUNTER_ADDRESS=${counter}`)
   : `${env.replace(/\s*$/, "")}\nFINAL_COUNTER_ADDRESS=${counter}\n`;
 writeFileSync(envPath, env);
 console.log("wrote    ", envPath, "FINAL_COUNTER_ADDRESS");
+}
 
 console.log("\nnext:");
 console.log("  npx tsx scripts/call.ts both");

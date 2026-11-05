@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <title>FinalCounter — permissions</title>
+    <meta
+      name="description"
+      content="Change the agent grant for the FinalCounter demo: epoch budget, allowlisted selectors, and revocation."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23070907'/%3E%3Cpath d='M3 3h2v10H3zM7 3h2v10H7zM11 3h2v10h-2z' fill='%23c4f75a'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./final.css" />
+  </head>
+  <body>
+    <div class="gridwash" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="FinalCounter demo">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">AXON <span class="brand-sub">FINAL</span></span>
+      </a>
+      <nav class="topnav" aria-label="Sections">
+        <a href="./">demo</a>
+        <a href="./permissions" aria-current="page">permissions</a>
+        <a href="https://altmempoolexplorer.forshtat.com" target="_blank" rel="noreferrer">explorer ↗</a>
+      </nav>
+      <div class="topbar-status" title="devnet health">
+        <span class="status-dot" id="net-dot" aria-hidden="true"></span>
+        <span id="net-label">chain 1337</span>
+      </div>
+    </header>
+
+    <main class="demo-main">
+      <section class="perm-hero">
+        <p class="eyebrow">PermissionRegistry · live grant</p>
+        <h1>Change what the agent may spend.</h1>
+        <p class="lede">
+          The agent is not trusted by the counter. The counter only asks the registry whether
+          <code>msg.sender</code> is a registered account. This page updates the grant that the
+          agent's <strong>VERIFY</strong> frame must satisfy before the
+          <strong>SENDER</strong> frame can execute.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="./">back to the demo</a>
+          <button class="button" type="button" id="reload-permission">reload grant</button>
+        </div>
+      </section>
+
+      <div class="perm-grid">
+        <section class="panel">
+          <header class="section-head">
+            <div>
+              <p class="kicker">01 · current grant</p>
+              <h2>On-chain authority.</h2>
+            </div>
+            <span class="chip muted" id="grant-status">loading</span>
+          </header>
+
+          <div class="perm-card">
+            <dl class="grant-grid">
+              <div class="grant-stat">
+                <dt>budget / epoch</dt>
+                <dd id="grant-budget">—</dd>
+              </div>
+              <div class="grant-stat">
+                <dt>spent this epoch</dt>
+                <dd id="grant-spent">—</dd>
+              </div>
+              <div class="grant-stat">
+                <dt>remaining</dt>
+                <dd id="grant-remaining">—</dd>
+              </div>
+              <div class="grant-stat">
+                <dt>epoch length</dt>
+                <dd id="grant-epoch">—</dd>
+              </div>
+            </dl>
+
+            <dl class="kv-list">
+              <div><dt>account</dt><dd id="grant-account">—</dd></div>
+              <div><dt>agent key</dt><dd id="grant-agent-key">—</dd></div>
+              <div><dt>owner</dt><dd id="grant-owner">—</dd></div>
+              <div><dt>grant hash</dt><dd id="grant-hash">—</dd></div>
+              <div><dt>version</dt><dd id="grant-version">—</dd></div>
+              <div><dt>expires</dt><dd id="grant-expires">—</dd></div>
+              <div><dt>key scheme</dt><dd id="grant-scheme">—</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header class="section-head">
+            <div>
+              <p class="kicker">02 · update</p>
+              <h2>Set the next budget.</h2>
+            </div>
+            <span class="chip muted" id="update-status">idle</span>
+          </header>
+
+          <form class="perm-form" id="permission-form" autocomplete="off" novalidate>
+            <label class="field">
+              <span>budget per epoch (ETH)</span>
+              <input
+                id="budget-input"
+                type="text"
+                inputmode="decimal"
+                placeholder="0.05"
+                spellcheck="false"
+              />
+            </label>
+
+            <div class="amount-presets">
+              <span>quick budget</span>
+              <button type="button" data-budget="0.001">0.001</button>
+              <button type="button" data-budget="0.01">0.01</button>
+              <button type="button" data-budget="0.05">0.05</button>
+              <button type="button" data-budget="0.5">0.5</button>
+              <button type="button" data-budget="1">1</button>
+            </div>
+
+            <div>
+              <span class="field" style="display:block;margin-bottom:6px">
+                <span>allowlisted selectors</span>
+              </span>
+              <div class="toggle-list" id="allowlist">
+                <label class="toggle-row">
+                  <span class="toggle-copy">
+                    <strong>increment()</strong>
+                    <small>0xd09de08a · no value</small>
+                  </span>
+                  <input type="checkbox" data-fn="increment" />
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-copy">
+                    <strong>pay()</strong>
+                    <small>0x1b9265b8 · agent price 0.0001 ETH</small>
+                  </span>
+                  <input type="checkbox" data-fn="pay" />
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-copy">
+                    <strong>payAmount(uint256)</strong>
+                    <small>0x5f936256 · spend equals the amount</small>
+                  </span>
+                  <input type="checkbox" data-fn="payAmount" />
+                </label>
+              </div>
+            </div>
+
+            <p class="hint" id="update-hint">
+              Saving writes <code>permissionRegistry.grantAgent(...)</code> from the owner key.
+              Set the budget below the amount you plan to send and the next agent spend is
+              rejected before the counter runs. Raising it again makes the same call pass.
+            </p>
+
+            <div class="perm-form-actions">
+              <button class="button primary" type="submit" id="save-permission">
+                save permission
+              </button>
+              <button class="button" type="button" id="reset-form">reset</button>
+              <button class="button danger" type="button" id="revoke-grant">
+                revoke grant
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <section class="panel">
+        <header class="section-head">
+          <div>
+            <p class="kicker">03 · demo beats</p>
+            <h2>Run the budget violation.</h2>
+          </div>
+        </header>
+
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h3>beat 1 · human vs agent</h3>
+            <p class="empty-line">
+              On the demo page, call <code>increment()</code> as <strong>humanCall</strong> and then
+              as <strong>agentCall</strong>. Both hit the same counter endpoint; the human adds 1
+              through an ordinary EOA transaction, the agent adds 10 through a VERIFY + SENDER
+              frame transaction.
+            </p>
+          </div>
+          <div class="detail-card">
+            <h3>beat 2 · budget violation</h3>
+            <p class="empty-line">
+              Set the budget just below an amount you want to block (for example
+              <strong>0.001 ETH</strong>), then call <code>payAmount(uint256)</code> as the agent with
+              a larger amount such as <strong>0.05 ETH</strong>. The call is rejected with
+              <code>E_EPOCH_BUDGET</code>. Raise the budget to <strong>0.5 ETH</strong>, call the same
+              amount again, and it passes.
+            </p>
+          </div>
+        </div>
+
+        <div class="perm-foot">
+          <a class="button primary" href="./#call-panel">go to the call panel</a>
+          <a class="button" href="./">demo overview</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header class="section-head">
+          <div>
+            <p class="kicker">04 · result</p>
+            <h2>Owner transactions.</h2>
+          </div>
+          <button class="button" type="button" id="refresh-permission">refresh state</button>
+        </header>
+
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h3>transactions submitted</h3>
+            <ul class="tx-list" id="tx-list">
+              <li><span class="tx-label">No permission change in this session yet.</span><span></span></li>
+            </ul>
+          </div>
+          <div class="detail-card">
+            <h3>after</h3>
+            <dl class="kv-list" id="after-list">
+              <div><dt>budget</dt><dd>—</dd></div>
+              <div><dt>spent</dt><dd>—</dd></div>
+              <div><dt>remaining</dt><dd>—</dd></div>
+              <div><dt>active</dt><dd>—</dd></div>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <div>
+        <span class="brand-name small">AXON <span class="brand-sub">FINAL</span></span>
+        <span class="muted">agent-native accounts · EIP-8141 devnet</span>
+      </div>
+      <div class="muted">
+        <span>chain 1337</span>
+        <span>·</span>
+        <span>registry <code id="foot-registry">—</code></span>
+      </div>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./permissions.js"></script>
+  </body>
+</html>
