@@ -2133,3 +2133,17 @@ body {
   left: 50%;
   transform: translateX(-50%);
 }
+
+/* Continue the hero's horizontal edges across the full viewport. */
+.axon-hero::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  border-block: 1px solid var(--border);
+  pointer-events: none;
+  z-index: -2;
+}
