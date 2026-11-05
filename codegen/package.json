@@ -1,0 +1,19 @@
+{
+  "name": "@axon/codegen",
+  "version": "0.1.0",
+  "description": "Turn @agentAction annotations and contract ABIs into one manifest consumed by the SDK, simulator and agent",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "tsx scripts/generate.ts",
+    "check": "tsx scripts/generate.ts --check",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15"
+  }
+}
