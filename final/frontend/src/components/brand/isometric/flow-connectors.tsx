@@ -9,11 +9,18 @@ const links = [
   [4,0,4,1,"Authority valid","left"],[4,1,5,0,"Submit + include","top"],
   [5,0,5,1,"Success","top"],[5,0,5,2,"Check failed","top"],
 ] as const
-interface Wire { d:string; start:XY; end:XY; label:string; x:number; y:number; rotated:boolean }
+interface Wire { fromStage:number; toStage:number; d:string; start:XY; end:XY; label:string; x:number; y:number; rotated:boolean }
 const overlap=(a:Obstacle,b:Obstacle)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top
 
-export function FlowConnectors({storyRef}:{storyRef:RefObject<HTMLDivElement|null>}) {
+export function FlowConnectors({storyRef,activeStage}:{storyRef:RefObject<HTMLDivElement|null>;activeStage:number}) {
   const id=useId()
+  const [visible,setVisible]=useState(false)
+  useEffect(()=>{
+    if(!storyRef.current)return
+    const observer=new IntersectionObserver(([entry])=>setVisible(entry.isIntersecting))
+    observer.observe(storyRef.current)
+    return()=>observer.disconnect()
+  },[storyRef])
   const [drawing,setDrawing]=useState<{width:number;height:number;wires:Wire[]}>({width:1,height:1,wires:[]})
   const cache=useRef("")
   useEffect(()=>{
@@ -102,7 +109,7 @@ export function FlowConnectors({storyRef}:{storyRef:RefObject<HTMLDivElement|nul
           if(labelPosition)break
         }
         for(const {a,b,length} of segments)if(length>40)occupied.push({left:Math.min(a.x,b.x)+(a.x===b.x?-4:16),right:Math.max(a.x,b.x)+(a.x===b.x?4:-16),top:Math.min(a.y,b.y)+(a.y===b.y?-4:16),bottom:Math.max(a.y,b.y)+(a.y===b.y?4:-16)})
-        wires.push({d:points.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '),start:points[0],end:points[points.length-1],label,...(labelPosition??{x:-1000,y:-1000,rotated:false})})
+        wires.push({fromStage,toStage,d:points.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '),start:points[0],end:points[points.length-1],label,...(labelPosition??{x:-1000,y:-1000,rotated:false})})
       }
       const last=story.lastElementChild?.getBoundingClientRect()
       const next={width,height:Math.ceil((last?.bottom??root.bottom)-root.top),wires}, serialized=JSON.stringify(next)
@@ -117,8 +124,8 @@ export function FlowConnectors({storyRef}:{storyRef:RefObject<HTMLDivElement|nul
     schedule()
     return()=>{cancelled=true;observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule)}
   },[storyRef])
-  return <svg className="flow-routed-connectors" style={{position:"absolute",left:-28,top:0,overflow:"visible",pointerEvents:"none",zIndex:1}} width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width} ${drawing.height}`} aria-hidden="true" data-connection-count={drawing.wires.length}>
+  return <svg className={`flow-routed-connectors ${visible?"is-visible":""}`} style={{position:"absolute",left:-28,top:0,overflow:"visible",pointerEvents:"none",zIndex:1}} width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width} ${drawing.height}`} aria-hidden="true" data-connection-count={drawing.wires.length}>
     <defs><marker id={id} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L6 3.5 L0 7" fill="none" stroke="currentColor" strokeWidth="1.6"/></marker></defs>
-    {drawing.wires.map((wire,index)=><g key={index}><path className="flow-route-underlay" d={wire.d}/><path className="flow-route-line" d={wire.d} markerEnd={`url(#${id})`}/><circle cx={wire.start.x} cy={wire.start.y} r="3"/><g transform={`translate(${wire.x} ${wire.y})${wire.rotated?' rotate(-90)':''}`}><rect x={-(wire.label.length*5.4+18)/2} y="-10" width={wire.label.length*5.4+18} height="20"/><text textAnchor="middle" dominantBaseline="central">{wire.label}</text></g></g>)}
+    {drawing.wires.map((wire,index)=><g key={index} className={`${wire.fromStage===activeStage||wire.toStage===activeStage?"is-current":""} ${wire.fromStage===0||wire.label==="Success"?"flow-wire-green":"flow-wire-cyan"}`}><path className="flow-route-underlay" d={wire.d}/><path className="flow-route-line" d={wire.d} markerEnd={`url(#${id})`}/><path className="flow-route-pulse" d={wire.d} pathLength="1"/><circle cx={wire.start.x} cy={wire.start.y} r="3"/><g transform={`translate(${wire.x} ${wire.y})${wire.rotated?' rotate(-90)':''}`}><rect x={-(wire.label.length*5.4+18)/2} y="-10" width={wire.label.length*5.4+18} height="20"/><text textAnchor="middle" dominantBaseline="central">{wire.label}</text></g></g>)}
   </svg>
 }

@@ -8,3 +8,9 @@
 .flow-diagram-step::after { display:none; }
 .flow-stage-composition .flow-block-wire { display:none!important; }
 .flow-routed-connectors { z-index:1; }
+
+.flow-wire-cyan { --wire-signal:#57d8eb; }.flow-wire-green { --wire-signal:#68f2c2; }
+.flow-routed-connectors .flow-route-pulse { fill:none; stroke:var(--wire-signal); stroke-width:3.5; stroke-linecap:square; stroke-dasharray:.045 .955; opacity:.35; animation:flow-wire-signal 4s linear infinite; animation-play-state:paused; }
+.flow-routed-connectors.is-visible .is-current .flow-route-pulse { animation-play-state:running; opacity:1; }
+@keyframes flow-wire-signal { from {stroke-dashoffset:1;} to {stroke-dashoffset:0;} }
+@media(prefers-reduced-motion:reduce) { .flow-routed-connectors .flow-route-pulse { display:none; animation:none; } }

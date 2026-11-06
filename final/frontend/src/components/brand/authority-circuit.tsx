@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react"
-import { Check, KeyRound, ShieldCheck, ShieldX, UserRound, Fingerprint, ArrowUpRight, Network } from "lucide-react"
+import { Check, KeyRound, ShieldCheck, ShieldX, UserRound, Pause, Play, Fingerprint, ArrowUpRight, Network } from "lucide-react"
 import { ReferenceFrame } from "./reference-frame"
 import "./authority-circuit.css"
 
@@ -24,10 +24,25 @@ function Layer({cy,title,detail,active,blocked=false}: {cy:number;title:string;d
 }
 
 export function AuthorityCircuit(){
-  const [selected,setSelected]=useState(2)
+  const [selected,setSelected]=useState(0)
   const [visible,setVisible]=useState(false)
+  const [playing,setPlaying]=useState(true)
+  const [interacting,setInteracting]=useState(false)
+  const [reducedMotion,setReducedMotion]=useState(false)
   const ref=useRef<HTMLDivElement>(null)
   const id=useId()
+  useEffect(()=>{
+    const media=window.matchMedia("(prefers-reduced-motion: reduce)")
+    const update=()=>setReducedMotion(media.matches)
+    update();media.addEventListener("change",update)
+    return()=>media.removeEventListener("change",update)
+  },[])
+  const cycling=visible&&playing&&!interacting&&!reducedMotion
+  useEffect(()=>{
+    if(!cycling)return
+    const timer=window.setTimeout(()=>setSelected(index=>(index+1)%scenarios.length),7000)
+    return()=>window.clearTimeout(timer)
+  },[cycling,selected])
   const scenario=scenarios[selected]
   const owner=scenario.id==="owner", allowed=scenario.id==="allowed", blocked=scenario.id==="blocked"||scenario.id==="revoked"
   useEffect(()=>{
@@ -36,8 +51,8 @@ export function AuthorityCircuit(){
     return()=>observer.disconnect()
   },[])
   return <ReferenceFrame className={`authority-circuit ${visible?"is-visible":""}`}><div ref={ref}>
-    <header className="authority-circuit-header"><span><i/> Axon / Authority flow</span><span>Ethereum · EIP-8141 devnet</span></header>
-    <div className="authority-scenarios" role="group" aria-label="Authority flow scenario">{scenarios.map((item,index)=><button type="button" key={item.id} aria-pressed={selected===index} onClick={()=>setSelected(index)}><item.icon size={14}/>{item.label}</button>)}</div>
+    <header className="authority-circuit-header"><span><i/> Axon / Authority flow</span><span>Ethereum · EIP-8141 devnet</span><button type="button" className="authority-auto-toggle" onClick={()=>setPlaying(value=>!value)} aria-label={playing?"Pause automatic scenarios":"Play automatic scenarios"}>{playing?<Pause size={13}/>:<Play size={13}/>} {playing?"Pause":"Play"}</button></header>
+    <div className="authority-scenarios" role="group" aria-label="Authority flow scenario" data-cycling={cycling} onPointerEnter={()=>setInteracting(true)} onPointerLeave={()=>setInteracting(false)} onFocusCapture={()=>setInteracting(true)} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget))setInteracting(false)}}>{scenarios.map((item,index)=><button type="button" key={item.id} aria-pressed={selected===index} onClick={()=>setSelected(index)}><item.icon size={14}/>{item.label}</button>)}</div>
     <div className="authority-circuit-scroll"><svg viewBox="0 0 1200 610" role="img" aria-labelledby={`${id}-title ${id}-desc`}>
       <title id={`${id}-title`}>Owner authority and agent validation circuit</title><desc id={`${id}-desc`}>An owner can update a permission grant. Agents submit signed intents through alternative admission. Live permission, protocol rules and settlement layers separate permitted execution from rejection. Current illustration: {scenario.detail}</desc>
       <defs><pattern id={`${id}-dots`} width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r=".65" fill="var(--border)"/></pattern></defs>
@@ -65,7 +80,7 @@ export function AuthorityCircuit(){
       <g className="authority-layer-caption"><text x="700" y="560" textAnchor="middle">One action. Multiple independent boundaries.</text><text x="700" y="580" textAnchor="middle">VERIFY establishes authority. SENDER settles execution.</text></g>
       <g className="authority-signal-legend"><circle cx="46" cy="548" r="3"/><text x="58" y="552">Moving signals illustrate requests, not live transactions.</text></g>
     </svg></div>
-    <div className="authority-circuit-explanation" aria-live="polite"><div><span className="authority-circuit-status"><i/>{scenario.status}</span><h3>{scenario.title}</h3><p>{scenario.detail}</p></div><div className={`authority-outcome ${blocked?"is-rejected":""}`}><scenario.icon size={20}/><strong>{scenario.outcome}</strong><span>{scenario.reason}</span></div></div>
+    <div className="authority-circuit-explanation" aria-live={playing?"off":"polite"}><div><span className="authority-circuit-status"><i/>{scenario.status}</span><h3>{scenario.title}</h3><p>{scenario.detail}</p></div><div className={`authority-outcome ${blocked?"is-rejected":""}`}><scenario.icon size={20}/><strong>{scenario.outcome}</strong><span>{scenario.reason}</span></div></div>
     <footer className="authority-circuit-footer"><span><Check size={13}/> Live grant reads</span><span><Check size={13}/> Scoped intents</span><span><Check size={13}/> Protocol-owned rules</span><span><ArrowUpRight size={13}/> Illustrative scenarios</span></footer>
   </div></ReferenceFrame>
 }
