@@ -12,3 +12,6 @@ broadcast/
 
 /zk/build/
 /zk/private/
+
+# Frontend assets staged by the production build.
+/final/server/public/

@@ -8,7 +8,8 @@
     "start": "tsx index.ts",
     "dev": "tsx watch index.ts",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck"
+    "build": "npm run typecheck",
+    "test:static": "tsx --test test/static.test.ts"
   },
   "dependencies": {
     "@axon/sdk": "file:../../sdk",
