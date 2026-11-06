@@ -39,7 +39,7 @@ Copy the **current values** from your working local configuration into Render's 
 - `ACCOUNT_ADDRESS`: current deployed agent account.
 - `FINAL_COUNTER_ADDRESS`: current deployed demo target.
 
-Render assigns `PORT`; do not hard-code it. `deploy.sh` maps it to `FINAL_PORT` and binds `0.0.0.0`. If no hosting-platform port is provided, the local default is 8900.
+Render assigns `PORT`; do not hard-code it. `deploy.sh` maps it to `FINAL_PORT` and always binds `0.0.0.0`, overriding a copied local FINAL_HOST value. If no hosting-platform port is provided, the local default is 8900.
 
 The server can read public deployment metadata from `final/deployment.json`, but explicitly set the three address variables above when the live deployment differs. A devnet reset can invalidate old addresses.
 
@@ -104,3 +104,7 @@ curl https://YOUR-SERVICE.onrender.com/api/health
 ```
 
 `/api/ready` is the process health check. `/api/health` additionally checks the execution RPC. Deep links return the SPA HTML; missing assets return 404. Hashed assets are cached, while HTML is revalidated so a new deploy loads the current bundle.
+
+## Render cannot detect an open port
+
+If an older deployed script retained `FINAL_HOST=127.0.0.1` from copied local settings, set `FINAL_HOST=0.0.0.0` in Render and redeploy. An immediate start-command override is `FINAL_HOST=0.0.0.0 bash deploy.sh`. The current script enforces that binding itself. Remove local-only `FINAL_PORT` values and let Render provide `PORT` unless you intentionally configure a custom port.

@@ -12,7 +12,8 @@ if [[ ! -x "$SERVER_DIR/node_modules/.bin/tsx" ]]; then
   exit 1
 fi
 export NODE_ENV=production
-export FINAL_HOST="${FINAL_HOST:-0.0.0.0}"
+# Production must remain externally reachable even if local env values were copied.
+export FINAL_HOST=0.0.0.0
 # Render's assigned PORT takes precedence over a local FINAL_PORT.
 export FINAL_PORT="${PORT:-${FINAL_PORT:-8900}}"
 export FINAL_API_ONLY=false
