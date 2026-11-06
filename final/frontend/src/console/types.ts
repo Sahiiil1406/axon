@@ -116,6 +116,7 @@ export interface AgentAllowlistEntry {
 }
 export interface AgentInfo {
   ensPublished?: boolean
+  scopedPolicyRoot?: string | null
   registrationTxHash?: string
   name: string
   account: string | null
@@ -133,6 +134,7 @@ export interface EnsState {
   agents: AgentInfo[]
 }
 export interface ConsoleState {
+  scopedPolicyRoot?: string | null
   ok: boolean
   worldIdTestSkip?: boolean
   worldId?: { appId: string } | { error: string } | null

@@ -207,6 +207,8 @@ contract AgentAccount {
         // Re-check the nonce: frame 0 validated it, but only execution advances it.
         if (i.nonce != intentNonce) revert Rejected(E_NONCE);
 
+        _checkExecutionPolicy(i, data);
+
         intentNonce = i.nonce + 1;
         spentInEpoch[epoch] += i.spend;
 
@@ -223,6 +225,8 @@ contract AgentAccount {
     /// @notice Mempool-verifiable authority rules. Returns OK or a reason code.
     /// @dev    Reads `PermissionRegistry` (foreign storage, admitted by the staked
     ///         carve-out) but never `block.timestamp`.
+    function _checkExecutionPolicy(IntentLib.Intent memory, bytes calldata) internal view virtual {}
+
     function checkAuthority(IntentLib.Intent memory i, address agentKey) public view returns (bytes32) {
         PermissionRegistry.Grant memory g = _grant();
 

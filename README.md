@@ -89,3 +89,11 @@ The skill runs the SDK directly against chain 1337. For named agents, it reads t
 binding from Sepolia and uses the local agent signer. The web server is only
 needed to manage permissions. Add `--simulate` to the command for a preview
 that does not submit a transaction.
+
+## Deploy the frontend and API as one service
+
+Run `bash build.sh` at the repository root to build and copy the frontend into
+`final/server/public`, then run `bash deploy.sh` to serve the UI and API together.
+For Render, leave **Root Directory** empty, use **Build Command** `bash build.sh`
+and **Start Command** `bash deploy.sh`. See [DEPLOYMENT.md](DEPLOYMENT.md) for
+required environment variables and the root [render.yaml](render.yaml) Blueprint.

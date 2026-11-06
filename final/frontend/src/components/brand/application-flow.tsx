@@ -182,7 +182,7 @@ export function ApplicationFlow() {
         </SectionHeading>
         <div className="flow-scroll-layout">
           <div className="flow-scroll-story" ref={storyRef}>
-            <FlowConnectors storyRef={storyRef} />
+            <FlowConnectors storyRef={storyRef} activeStage={active} />
             {steps.map(({ label }, index) => (
               <article key={label} data-flow-stage={index} ref={element => { stepsRef.current[index] = element }} className={`flow-scroll-step flow-diagram-step ${active === index ? "is-active" : ""}`} aria-current={active === index ? "step" : undefined}>
                 <div className={`flow-stage-composition ${index === 1 ? "has-one-card" : "has-split-cards"}`}>

@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
+  UserRound,
   ArrowUpRight,
   Blocks,
   FileText,
@@ -283,7 +284,7 @@ export default function ConsoleApp() {
   }
   useEffect(() => {
     const original = document.title
-    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/agents" ? "Agents (ENS)" : path === "/app/activity" ? "Activity" : path === "/app/agents" ? "Agents (ENS)" : "Transaction details"}`
+    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/agents" ? "Agents (ENS)" : path === "/app/activity" ? "Activity" : path === "/app/profile" ? "Profile" : "Transaction details"}`
     return () => {
       document.title = original
     }
@@ -293,6 +294,7 @@ export default function ConsoleApp() {
     { href: "/app/agents", label: "Agents (ENS)", icon: Globe },
     { href: "/app/permissions", label: "Permissions", icon: Settings2 },
     { href: "/app/activity", label: "Activity", icon: Activity },
+    { href: "/app/profile", label: "Identity & verification", icon: UserRound, group: "Profile" },
   ]
   return (
     <ConsoleContext.Provider
@@ -363,7 +365,9 @@ export default function ConsoleApp() {
                   ? "Activity"
                   : path === "/app/agents"
                     ? "Agents (ENS)"
-                    : "Transaction details"
+                    : path === "/app/profile"
+                      ? "Profile"
+                      : "Transaction details"
           }
         />
         <div className="console-layout">
@@ -404,7 +408,7 @@ export default function ConsoleApp() {
                 <span className={`console-worldid-dot ${worldIdStatus}`} />
                 <span className="console-worldid-label">
                   World ID:{" "}
-                  {worldIdStatus === "verified" ? "Verified" : worldIdStatus}
+                  {worldIdSkipped ? "Testing bypass" : worldIdStatus === "verified" ? "Proof ready" : worldIdStatus}
                 </span>
               </span>
               <span className="console-sync">

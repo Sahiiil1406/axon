@@ -4,6 +4,7 @@ import { createPublicClient, decodeErrorResult, encodeAbiParameters, getAddress,
 import { sepolia } from "viem/chains"
 import { normalize } from "viem/ens"
 import { AxonClient } from "../../sdk/src/client.ts"
+import { INTENT_TUPLE } from "../../sdk/src/builder.ts"
 
 let stage = "setup"
 let hash: Hex | undefined
@@ -13,11 +14,13 @@ async function run() {
   const amount = action === "pay" ? args.shift() : undefined
   let name: string | undefined
   let simulateOnly = false
+  let scopedView: string | undefined
   while (args.length) {
     const option = args.shift()
     if (option === "--agent" && args[0] && !args[0].startsWith("--")) name = args.shift()!
+    else if (option === "--scoped-view" && args[0] && !args[0].startsWith("--")) scopedView = args.shift()!
     else if (option === "--simulate") simulateOnly = true
-    else throw new Error("Usage: counter.ts increment|pay <ETH> [--agent <name>] [--simulate]")
+    else throw new Error("Usage: counter.ts increment|pay <ETH> [--agent <name>] [--simulate] [--scoped-view <path>]")
   }
   if (action !== "increment" && action !== "pay") throw new Error("Choose increment or pay <ETH>.")
   if (action === "pay" && (!amount || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(amount) || !/[1-9]/.test(amount)))
@@ -77,10 +80,44 @@ async function run() {
     args: value ? encodeAbiParameters([{ type: "uint256" }], [value]) : "0x" as Hex,
     value, spend: value, nonce, deadline: now + 3600n, grantHash: grant.grantHash,
   }
-  const allowed = await client.isAllowed(target, intent.selector)
+  const allowed = scopedView ? undefined : await client.isAllowed(target, intent.selector)
   const policy = { active: grant.active, allowed, remainingWei: remaining.toString(), requestedWei: value.toString() }
   stage = "simulation"
-  const prepared = await client.prepare(intent)
+  let intentData: Hex | undefined
+  if (scopedView) {
+    stage = "proof"
+    const abi = parseAbi([
+      "function policyRoot() view returns (uint256)",
+      "function counter() view returns (address)",
+      "function scopeFor(address, bytes4) view returns (uint256)",
+    ])
+    const [root, scope, scopedTarget] = await Promise.all([
+      client.publicClient.readContract({ address: account, abi, functionName: "policyRoot" }),
+      client.publicClient.readContract({ address: account, abi, functionName: "scopeFor", args: [client.agentAddress, intent.selector] }),
+      client.publicClient.readContract({ address: account, abi, functionName: "counter" }),
+    ])
+    if (root === 0n || scopedTarget.toLowerCase() !== target.toLowerCase())
+      throw new Error("The scoped account has no active policy for this counter.")
+    const { proveScopedCall } = await import("../../zk/scripts/prove.mjs")
+    const view = JSON.parse(readFileSync(scopedView, "utf8"))
+    const proof = await proveScopedCall(view, { root, scope, nonce, amount: value })
+    const proofTuple = {
+      type: "tuple",
+      components: [
+        { name: "a", type: "uint256[2]" },
+        { name: "b", type: "uint256[2][2]" },
+        { name: "c", type: "uint256[2]" },
+        { name: "binding", type: "uint256" },
+      ],
+    } as const
+    intentData = encodeAbiParameters([INTENT_TUPLE, proofTuple], [intent, {
+      a: [BigInt(proof.a[0]), BigInt(proof.a[1])],
+      b: [[BigInt(proof.b[0][0]), BigInt(proof.b[0][1])], [BigInt(proof.b[1][0]), BigInt(proof.b[1][1])]],
+      c: [BigInt(proof.c[0]), BigInt(proof.c[1])], binding: proof.binding,
+    }])
+  }
+  stage = "simulation"
+  const prepared = await client.prepare(intent, intentData)
   const { result: simulated } = await client.simulateIntent(intent, { prepared })
   const simulation = {
     status: simulated.executionStatus, error: simulated.executionError,
@@ -134,7 +171,7 @@ try {
   process.exitCode = ["confirmed", "simulated"].includes(result.outcome) ? 0 : result.outcome === "pending" ? 2 : 1
 } catch (error) {
   // Avoid printing transport details that can contain private RPC URLs.
-  const reason = stage === "setup" || stage === "simulation"
+  const reason = stage === "setup" || stage === "simulation" || stage === "proof"
     ? (error as Error).message.split("\n")[0].replace(/https?:\/\/\S+/g, "[RPC URL]")
     : "Submission or inclusion could not be confirmed. Check transaction status before retrying."
   const outcome = stage === "submission" || stage === "inclusion" ? "uncertain" : "error"

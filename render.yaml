@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: axon
+    runtime: node
+    branch: ux-enhancment
+    buildCommand: bash build.sh
+    startCommand: bash deploy.sh
+    healthCheckPath: /api/ready
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: FINAL_HOST
+        value: 0.0.0.0
+      - key: FINAL_API_ONLY
+        value: "false"
+      - key: WORLD_ID_TEST_SKIP
+        value: "false"
+      - key: RPC
+        sync: false
+      - key: SIDECAR
+        sync: false
+      - key: DEPLOYER_PRIVATE_KEY
+        sync: false
+      - key: AGENT_PRIVATE_KEY
+        sync: false
+      - key: REGISTRY_ADDRESS
+        sync: false
+      - key: ACCOUNT_ADDRESS
+        sync: false
+      - key: FINAL_COUNTER_ADDRESS
+        sync: false
+      - key: SEPOLIA_RPC
+        sync: false
+      - key: SEPOLIA_OWNER_PRIVATE_KEY
+        sync: false
+      - key: ENS_REGISTRY
+        sync: false
+      - key: HUMAN_ENS_NAME
+        sync: false
+      - key: WORLD_ID_APP_ID
+        sync: false
+      - key: WORLD_ID_RP_ID
+        sync: false
+      - key: WORLD_ID_SIGNER_ADDRESS
+        sync: false
+      - key: WORLD_ID_RP_SIGNING_KEY
+        sync: false

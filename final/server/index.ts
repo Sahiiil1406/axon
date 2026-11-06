@@ -8,16 +8,17 @@ import { signRequest } from "@worldcoin/idkit-core/signing";
  *   - human: ordinary EOA transaction from DEPLOYER_PRIVATE_KEY
  *   - agent: EIP-8141 VERIFY + SENDER frame transaction from the Axon SDK
  *
- * Keys stay on 127.0.0.1. This is a devnet demo, not a production signer.
+ * Keys remain server-side. This is a devnet demo, not a production signer.
  */
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createPublicClient,
@@ -45,12 +46,18 @@ import { sepolia } from "viem/chains";
 import { getEnsText, normalize, packetToBytes } from "viem/ens";
 import { AxonClient } from "@axon/sdk";
 import { prepareEnsHierarchy, readEnsHierarchy } from "./ens-hierarchy.ts";
+import { createStaticHandler } from "./static.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(HERE, "..");
-const WEB = resolve(ROOT, "frontend/dist");
 const envFile = [resolve(HERE, ".env"), resolve(ROOT, ".env"), resolve(ROOT, "../.env")].find(existsSync);
 if (envFile) process.loadEnvFile(envFile);
+const WEB = process.env.FINAL_STATIC_DIR
+  ? resolve(HERE, process.env.FINAL_STATIC_DIR)
+  : existsSync(resolve(HERE, "public/index.html"))
+    ? resolve(HERE, "public")
+    : resolve(ROOT, "frontend/dist");
+const serveStatic = createStaticHandler(WEB);
 
 interface Deployment {
   chainId?: number;
@@ -347,19 +354,6 @@ const json = (res: ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body, null, 2));
 };
 
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".txt": "text/plain; charset=utf-8",
-};
-
 async function readBody(
   req: IncomingMessage,
 ): Promise<Record<string, unknown>> {
@@ -556,9 +550,23 @@ async function resolveAgentIdentity(name: string) {
   return { name, account: getAddress(account), agentKey: getAddress(agentKey), ensPublished };
 }
 
+async function readScopedPolicyRoot(account: Address): Promise<string | null> {
+  try {
+    const root = await publicClient.readContract({
+      address: account,
+      abi: parseAbi(["function policyRoot() view returns (uint256)"]),
+      functionName: "policyRoot",
+    });
+    return root.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function readNamedAgent(name: string, defaultPolicy?: {
   grant: GrantStruct;
   allowlist: Record<FunctionId, boolean>;
+  scopedPolicyRoot: string | null;
 }) {
   const agent = await resolveAgentIdentity(name);
   if (!agent) return null;
@@ -573,8 +581,12 @@ async function readNamedAgent(name: string, defaultPolicy?: {
         ]).then(([grant, allowlist]) => ({ grant, allowlist }));
   if (grant.owner === zeroAddress || grant.agentKey.toLowerCase() !== agent.agentKey.toLowerCase())
     return null;
+  const scopedPolicyRoot = defaultPolicy && agent.account.toLowerCase() === ACCOUNT.toLowerCase()
+    ? defaultPolicy.scopedPolicyRoot
+    : await readScopedPolicyRoot(agent.account);
   return {
     ...agent,
+    scopedPolicyRoot,
     active: grant.active,
     budget: grant.budgetPerEpoch,
     version: grant.version,
@@ -596,7 +608,7 @@ async function readEnsNamespace(parent: string, defaultPolicy?: Parameters<typeo
 }
 
 async function readState() {
-  const [counter, grantRaw, allowlist, blockNumber, balance, intentNonce] =
+  const [counter, grantRaw, allowlist, blockNumber, balance, intentNonce, scopedPolicyRoot] =
     await Promise.all([
       readCounter(),
       readGrantRaw(),
@@ -608,10 +620,12 @@ async function readState() {
         abi: ACCOUNT_ABI,
         functionName: "intentNonce",
       }) as Promise<bigint>,
+      readScopedPolicyRoot(ACCOUNT),
     ]);
 
   return {
     ok: true,
+    scopedPolicyRoot,
     checkedAt: new Date().toISOString(),
     worldIdTestSkip,
     worldId: worldIdError ? { error: worldIdError } : { appId: WORLD_ID_APP_ID },
@@ -652,7 +666,7 @@ async function readState() {
     intentNonce: intentNonce.toString(),
     history,
     ens: HUMAN_ENS_NAME
-      ? await readEnsNamespace(normalize(HUMAN_ENS_NAME), { grant: grantRaw.grant, allowlist })
+      ? await readEnsNamespace(normalize(HUMAN_ENS_NAME), { grant: grantRaw.grant, allowlist, scopedPolicyRoot })
           .catch(() => ({
             humanName: HUMAN_ENS_NAME, hierarchy: [], agents: [],
             error: "Could not read the ENS hierarchy from Sepolia.",
@@ -1120,56 +1134,32 @@ function remember(result: Record<string, unknown>) {
   history.splice(20);
 }
 
-function serveStatic(
-  req: IncomingMessage,
-  res: ServerResponse,
-  pathname: string,
-) {
-  let path = pathname;
-  if (path === "/demo" || path === "/demo/" || path === "/permissions" || path === "/permissions/") {
-    res.writeHead(302, { location: path.startsWith("/permissions") ? "/app/permissions" : "/app" });
-    res.end();
-    return;
-  }
-  if (path === "/" || path === "/app" || path.startsWith("/app/") || path === "/docs" || path === "/docs/" || path === "/design-system" || path === "/design-system/") path = "/index.html";
-
-  const file = resolve(WEB, `.${path}`);
-  if (file !== WEB && !file.startsWith(`${WEB}${sep}`)) {
-    res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
-    res.end("forbidden");
-    return;
-  }
-
-  readFile(file)
-    .then((body) => {
-      res.writeHead(200, {
-        "content-type":
-          MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
-        "cache-control": "no-store",
-        "content-length": body.length,
-        "x-content-type-options": "nosniff",
-      });
-      if (req.method === "HEAD") res.end();
-      else res.end(body);
-    })
-    .catch((error) => {
-      if ((error as { code?: string })?.code === "ENOENT") {
-        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        res.end("not found");
-      } else {
-        console.error("static:", error);
-        res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-        res.end("internal error");
-      }
-    });
-}
-
 const frontendOrigins = new Set(
   (process.env.AXON_FRONTEND_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
 );
+
+const runFile = promisify(execFile);
+let zkDemoRun: Promise<unknown> | undefined;
+
+async function runZkDemo() {
+  const zk = resolve(ROOT, "../zk");
+  if (!existsSync(resolve(zk, "build/verification-key.json")))
+    throw new Error("Build the ZK demo first with bash zk/scripts/setup.sh.");
+  if (!zkDemoRun) {
+    zkDemoRun = runFile(process.execPath, [resolve(zk, "scripts/test.mjs"), "--json"], {
+      cwd: zk,
+      timeout: 45_000,
+      maxBuffer: 256 * 1024,
+      env: { PATH: process.env.PATH },
+    }).then(({ stdout }) => JSON.parse(stdout.trim().split("\n").at(-1)!))
+      .catch(() => { throw new Error("The local ZK demo could not complete. Check the prover setup and try again."); })
+      .finally(() => { zkDemoRun = undefined; });
+  }
+  return zkDemoRun;
+}
 
 const server = createServer(async (req, res) => {
   const url = new URL(
@@ -1192,6 +1182,16 @@ const server = createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "POST" && url.pathname === "/api/zk/demo") {
+      const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+      if (!loopback || (req.headers.origin && !frontendOrigins.has(req.headers.origin))) {
+        json(res, 403, { ok: false, error: "The ZK demo is available from the local console." });
+        return;
+      }
+      json(res, 200, await runZkDemo());
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/ready") {
       json(res, 200, { ok: true, service: "axon-api" });
       return;
@@ -1428,7 +1428,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (!API_ONLY && !url.pathname.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
-      serveStatic(req, res, url.pathname);
+      await serveStatic(req, res, url.pathname);
       return;
     }
 
@@ -1439,10 +1439,11 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`FinalCounter demo  http://localhost:${PORT}`);
+  const listenHost = HOST.includes(":") ? `[${HOST}]` : HOST;
+  console.log(`FinalCounter demo  http://${listenHost}:${PORT}`);
   console.log(`  counter          ${COUNTER}`);
   console.log(`  agent account    ${ACCOUNT}`);
   console.log(`  registry         ${REGISTRY}`);
-  if (!API_ONLY) console.log(`  console          http://localhost:${PORT}/app`);
+  if (!API_ONLY) console.log(`  console          http://${listenHost}:${PORT}/app`);
   console.log(`  rpc host         ${new URL(RPC).hostname}`);
 });

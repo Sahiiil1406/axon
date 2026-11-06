@@ -6,3 +6,9 @@ cache/
 broadcast/
 *.log
 .DS_Store
+
+/zk/build/
+/zk/private/
+
+# Frontend assets staged by the production build.
+/final/server/public/
