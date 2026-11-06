@@ -8,19 +8,12 @@ build for agents at all.
 
 ## ENSv2 Integration (ENSv2 track)
 
-Axon integrates ENSv2 as the agent identity and permission control plane:
+Axon uses Sepolia for agent identity and the EIP-8141 devnet for permissions:
 
-- **Human name:** a main ENS name (e.g. `alice.eth`) on Sepolia
-- **Agent subdomains:** each agent lives as a subdomain (e.g. `trader.alice.eth`) with its own
-  **Permissioned Resolver** holding axon text records
-  (`axon.account`, `axon.agentKey`, `axon.budget`, `axon.active`, `axon.version`,
-  `axon.allowlist`)
-- **IAM map:** the `agent_subdomain → permission` mapping lives on ENSv2 itself. The parent
-  name owner controls all agent permissions via Enhanced Access Control on each subdomain's
-  resolver
-- **Execution:** permissions are synced from ENS text records to axon's devnet
-  `PermissionRegistry`, so `AgentAccount.validate()` enforces them at frame-tx validation
-  time
+- **Agent names:** Axon resolves each name to its account and agent key using Sepolia records.
+- **Execution:** The devnet `PermissionRegistry` stores the effective budget, allowlist,
+  and revocation state. Permission updates write only to the devnet.
+
 - **World ID Agent Pass:** authority changes (create agent, update budget/allowlist, revoke)
   require a human World ID verification before the owner transaction is submitted
 

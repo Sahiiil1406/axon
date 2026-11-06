@@ -98,7 +98,7 @@ export const updatePermission = (input: PermissionInput) =>
   request<PermissionPayload>("/api/permission", {
     method: "POST",
     body: JSON.stringify(input),
-  }, base, input.agentName ? 0 : undefined)
+  })
 
 export const fetchEnsState = async (): Promise<EnsState> => {
   const state = await request<ConsoleState>("/api/state")
@@ -127,7 +127,6 @@ export const registerEnsAgent = (input: {
   subdomain: string
   agentKey: string
   agentAccount: string
-  budgetEth: string
   worldIdProof?: WorldIdProof
 }) =>
   request<{

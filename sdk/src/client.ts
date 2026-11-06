@@ -1,6 +1,8 @@
 import {
   createPublicClient,
   http,
+  getAddress,
+  isAddress,
   type Abi,
   type Address,
   type Chain,
@@ -280,22 +282,22 @@ export class AxonClient {
   // Reads
   // -------------------------------------------------------------------
 
-  async getGrant(): Promise<Grant> {
+  async getGrant(account = this.config.account): Promise<Grant> {
     const g = (await this.publicClient.readContract({
       address: this.config.registry,
       abi: REGISTRY_ABI,
       functionName: "current",
-      args: [this.config.account],
+      args: [account],
     })) as Grant;
     return { ...g, active: Boolean(g.active) };
   }
 
-  async isAllowed(target: Address, selector: Hex): Promise<boolean> {
+  async isAllowed(target: Address, selector: Hex, account = this.config.account): Promise<boolean> {
     return (await this.publicClient.readContract({
       address: this.config.registry,
       abi: REGISTRY_ABI,
       functionName: "isAllowed",
-      args: [this.config.account, target, selector],
+      args: [account, target, selector],
     })) as boolean;
   }
 
@@ -329,7 +331,7 @@ export class AxonClient {
   }
 
   // -------------------------------------------------------------------
-  // ENSv2 — agent identity & permission resolution (Sepolia)
+  // ENSv2 — agent identity resolution (Sepolia)
   // -------------------------------------------------------------------
 
   /** Normalize an ENS name (e.g. "trader.alice.eth"). */
@@ -365,45 +367,38 @@ export class AxonClient {
     }
   }
 
-  /** Resolve an agent subdomain (e.g. `trader.alice.eth`) to its full permission set. */
-  async resolveAgent(name: string): Promise<AgentPermission | null> {
+  /**
+   * Resolve identity through ENS and read policy from the execution chain.
+   * The registry cannot enumerate selectors. Supply the target/selector pairs to check.
+   */
+  async resolveAgent(
+    name: string,
+    selectors: ReadonlyArray<{ target: Address; selector: Hex }> = [],
+  ): Promise<AgentPermission | null> {
     if (!this.ensPublicClient) return null;
 
     const normalized = this.normalizeEnsName(name);
-    const [account, agentKey, active, budget, version, allowlistRaw] =
-      await Promise.all([
-        this.getEnsTextRecord(name, "axon.account"),
-        this.getEnsTextRecord(name, "axon.agentKey"),
-        this.getEnsTextRecord(name, "axon.active"),
-        this.getEnsTextRecord(name, "axon.budget"),
-        this.getEnsTextRecord(name, "axon.version"),
-        this.getEnsTextRecord(name, "axon.allowlist"),
-      ]);
+    const [accountRecord, keyRecord] = await Promise.all([
+      this.getEnsTextRecord(normalized, "axon.account"),
+      this.getEnsTextRecord(normalized, "axon.agentKey"),
+    ]);
+    if (!accountRecord || !keyRecord ||
+        !isAddress(accountRecord, { strict: false }) || !isAddress(keyRecord, { strict: false })) return null;
 
-    if (!account || !agentKey) return null;
-
-    const allowlist: Array<{ target: Address; selector: Hex }> = [];
-    if (allowlistRaw) {
-      try {
-        for (const entry of allowlistRaw.split(",")) {
-          const [target, selector] = entry.trim().split(":");
-          if (target && selector) {
-            allowlist.push({ target: target as Address, selector: selector as Hex });
-          }
-        }
-      } catch {
-        // Malformed allowlist — leave empty.
-      }
-    }
+    const account = getAddress(accountRecord);
+    const agentKey = getAddress(keyRecord);
+    const grant = await this.getGrant(account);
+    if (grant.agentKey.toLowerCase() !== agentKey.toLowerCase()) return null;
+    const allowed = await Promise.all(selectors.map(({ target, selector }) => this.isAllowed(target, selector, account)));
 
     return {
       name: normalized,
-      account: account as Address,
-      agentKey: agentKey as Address,
-      active: active === "true",
-      budget: budget ? BigInt(budget) : 0n,
-      version: version ? BigInt(version) : 0n,
-      allowlist,
+      account,
+      agentKey,
+      active: grant.active,
+      budget: grant.budgetPerEpoch,
+      version: grant.version,
+      allowlist: selectors.filter((_, index) => allowed[index]),
       textRecords: {},
     };
   }

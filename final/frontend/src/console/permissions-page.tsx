@@ -97,8 +97,8 @@ export function PermissionsPage() {
 
   useEffect(() => {
     if (!state || dirty) return
-    setBudget(selectedAgent ? eth(selectedAgentInfo?.localPolicy?.budget ?? selectedAgentInfo?.budget) : state.grant.budgetEth)
-    setAllow(selectedAgent ? selectedAgentInfo?.localPolicy?.allow ?? {
+    setBudget(selectedAgent ? eth(selectedAgentInfo?.budget) : state.grant.budgetEth)
+    setAllow(selectedAgent ? {
       increment: false,
       pay: false,
       payAmount: false,
@@ -115,7 +115,7 @@ export function PermissionsPage() {
 
   const disabled = !state || loading || !!error || !!busy
   const needsSetup = !!selectedAgent && (!selectedAgentInfo || !!selectedAgentInfo.unresolved)
-  const agentDisabled = disabled || (!!selectedAgent && !selectedAgentInfo)
+  const agentDisabled = disabled || needsSetup
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -207,8 +207,7 @@ export function PermissionsPage() {
       >
         Set the spending budget and callable selectors. Changes are submitted
         by the demo server's owner key and read live by the agent account.
-        For named agents, Axon stores the name and policy in its Sepolia registry
-        and syncs the grant to the devnet PermissionRegistry.
+        Sepolia resolves each agent name to its account. The devnet PermissionRegistry stores and enforces its grant.
       </PageHeading>
 
       {/* Agent selector */}
@@ -427,9 +426,9 @@ export function PermissionsPage() {
           )}
           <p className="console-help">
             {needsSetup
-              ? "Saving creates onchain name and permission records on Sepolia and applies the policy to the default devnet account."
+              ? "This name needs a valid Sepolia account binding and devnet grant before its permissions can be edited."
               : selectedAgent
-              ? `Saving updates Axon’s Sepolia records for ${selectedAgent} and syncs the devnet grant. World ID verification is required.`
+              ? `Saving updates the devnet grant for ${selectedAgent}. World ID verification is required.`
               : grant && !grant.active
                 ? "The grant is revoked. Saving re-grants the existing agent key with the budget and selectors above."
                 : "Saving submits grantAgent from the owner key, then updates any changed selector permissions."}
@@ -451,7 +450,7 @@ export function PermissionsPage() {
               <Check size={14} />
               {worldIdStatus !== "verified"
                 ? "Verify with World ID"
-                : needsSetup ? "Set permissions" : grant && !grant.active ? "Save & regrant" : "Save permission"}
+                : needsSetup ? "Account setup required" : grant && !grant.active ? "Save & regrant" : "Save permission"}
             </Button>
             <Button
               type="button"

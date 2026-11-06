@@ -92,7 +92,7 @@ if (!Number.isSafeInteger(CHAIN_ID) || CHAIN_ID <= 0) throw new Error("CHAIN_ID 
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("FINAL_PORT must be between 1 and 65535");
 const EXPLORER = "https://altmempoolexplorer.forshtat.com/tx/";
 
-// ENSv2 (Sepolia) — agent identity & permission control plane
+// ENSv2 (Sepolia) — agent identity
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC;
 const configuredSepoliaOwnerKey = process.env.SEPOLIA_OWNER_PRIVATE_KEY?.trim();
 const SEPOLIA_OWNER_PK = configuredSepoliaOwnerKey?.replace(/^(?:0x)?/i, "0x");
@@ -539,44 +539,39 @@ async function readEnsTextRecord(name: string, key: string): Promise<string | nu
   }
 }
 
-async function resolveAgentFromEns(name: string): Promise<{
-  name: string;
-  account: Address | null;
-  agentKey: Address | null;
-  active: boolean;
-  budget: bigint;
-  version: bigint;
-  allowlist: Array<{ target: Address; selector: Hex }>;
-} | null> {
-  const [account, agentKey, active, budget, version, allowlistRaw] = await Promise.all([
+async function resolveAgentIdentity(name: string) {
+  const [account, agentKey] = await Promise.all([
     readEnsTextRecord(name, "axon.account"),
     readEnsTextRecord(name, "axon.agentKey"),
-    readEnsTextRecord(name, "axon.active"),
-    readEnsTextRecord(name, "axon.budget"),
-    readEnsTextRecord(name, "axon.version"),
-    readEnsTextRecord(name, "axon.allowlist"),
   ]);
+  if (!account || !agentKey || !isAddress(account, { strict: false }) || !isAddress(agentKey, { strict: false }))
+    return null;
+  return { name: normalize(name), account: getAddress(account), agentKey: getAddress(agentKey) };
+}
 
-  if (!account || !agentKey) return null;
-
-  const allowlist: Array<{ target: Address; selector: Hex }> = [];
-  if (allowlistRaw) {
-    for (const entry of allowlistRaw.split(",")) {
-      const [target, selector] = entry.trim().split(":");
-      if (target && selector && isAddress(target)) {
-        allowlist.push({ target: target as Address, selector: selector as Hex });
-      }
-    }
-  }
-
+async function readNamedAgent(name: string, defaultPolicy?: {
+  grant: GrantStruct;
+  allowlist: Record<FunctionId, boolean>;
+}) {
+  const agent = await resolveAgentIdentity(name);
+  if (!agent) return null;
+  const { grant, allowlist } =
+    defaultPolicy && agent.account.toLowerCase() === ACCOUNT.toLowerCase()
+      ? defaultPolicy
+      : await Promise.all([
+          publicClient.readContract({
+            address: REGISTRY, abi: REGISTRY_ABI, functionName: "current", args: [agent.account],
+          }) as Promise<GrantStruct>,
+          readAllowlist(agent.account),
+        ]).then(([grant, allowlist]) => ({ grant, allowlist }));
+  if (grant.owner === zeroAddress || grant.agentKey.toLowerCase() !== agent.agentKey.toLowerCase())
+    return null;
   return {
-    name: normalize(name),
-    account: account as Address,
-    agentKey: agentKey as Address,
-    active: active === "true",
-    budget: budget ? BigInt(budget) : 0n,
-    version: version ? BigInt(version) : 0n,
-    allowlist,
+    ...agent,
+    active: grant.active,
+    budget: grant.budgetPerEpoch,
+    version: grant.version,
+    allowlist: FUNCTIONS.filter(({ id }) => allowlist[id]).map(({ selector }) => ({ target: COUNTER, selector })),
   };
 }
 
@@ -641,7 +636,7 @@ async function readState() {
       const subs = agentStore.names(normalize(HUMAN_ENS_NAME));
       const resolved = await Promise.all(
         subs.map(async (sub) => {
-          const agent = await resolveAgentFromEns(sub);
+          const agent = await readNamedAgent(sub, { grant: grantRaw.grant, allowlist });
           return {
             name: sub,
             registrationTxHash: agentStore.hash(sub),
@@ -996,7 +991,8 @@ async function writePermissions(body: Record<string, unknown>, account: Address,
   }
 
   const budgetChanged = budget !== grant.budgetPerEpoch;
-  const shouldGrant = budgetProvided || body.active === true || budgetChanged;
+  const shouldGrant = body.active === true || budgetChanged ||
+    (budgetProvided && (!grant.active || (grant.expiresAt !== 0n && grant.expiresAt <= now)));
 
   if (shouldGrant) {
     if (grant.agentKey === zeroAddress)
@@ -1105,116 +1101,15 @@ async function verifyWorldIdProof(proof: unknown, req: IncomingMessage): Promise
   }
 }
 
-/** Owner-scoped permission update for a specific agent subdomain.
- * Writes ENS text records (Sepolia) + syncs axon PermissionRegistry (devnet).
- * Requires a valid World ID Agent Pass proof before any state change.
- */
-async function updatePermissionForAgent(
-  body: Record<string, unknown>,
-  agentName: string,
-): Promise<{ ok: boolean; txs: { label: string; hash: Hex }[]; state: unknown }> {
-  agentName = normalize(agentName);
+async function updatePermissionForAgent(body: Record<string, unknown>, name: string) {
+  const agentName = normalize(name);
   if (!HUMAN_ENS_NAME || !agentName.endsWith(`.${normalize(HUMAN_ENS_NAME)}`))
     throw new Error("Select an agent under the configured ENS parent.");
 
-  if (!ensOwnerWallet || !ensPublicClient) {
-    throw new Error("ENS Sepolia client not configured on the server");
-  }
-  if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
-  if (!await ensPublicClient.getCode({ address: ENS_REGISTRY }))
-    throw new Error("ENS_REGISTRY has no contract code on Sepolia. Configure a deployed resolver before saving permissions.");
-  const ownerWallet = ensOwnerWallet;
-
-  const txs: { label: string; hash: Hex }[] = [];
-
-  const resolved = await resolveAgentFromEns(agentName);
-  if (!resolved && (!agentStore.names(normalize(HUMAN_ENS_NAME)).includes(agentName) || body.active === false))
-    throw new Error(`Agent ${agentName} has no registered Axon records.`);
-  const agent = resolved ?? {
-    account: ACCOUNT,
-    agentKey: privateKeyToAccount(AGENT_PK).address,
-    active: false,
-    budget: 0n,
-    version: 0n,
-    allowlist: [],
-  };
-  if (!agent.account) throw new Error("Agent record has no devnet account.");
-
-  const budgetProvided =
-    body.budgetEth != null && String(body.budgetEth).trim() !== "";
-  let budget = agent.budget;
-  if (budgetProvided) {
-    budget = parseEther(String(body.budgetEth));
-    if (budget <= 0n) throw new Error("budget must be greater than 0");
-    if (budget > 2n ** 128n - 1n) throw new Error("budget exceeds uint128");
-  }
-
-  const account = getAddress(agent.account);
-  const allow = body.allow;
-  const entries = new Map(agent.allowlist.map((entry) => [
-    `${entry.target.toLowerCase()}:${entry.selector.toLowerCase()}`, entry,
-  ]));
-  const textUpdates: Array<{ key: string; value: string }> = [];
-  if (!resolved) {
-    if (!budgetProvided) throw new Error("Set an initial budget for this agent.");
-    textUpdates.push(
-      { key: "axon.dnsName", value: agentName },
-      { key: "axon.agentKey", value: agent.agentKey! },
-    );
-  }
-  if (budgetProvided && budget !== agent.budget)
-    textUpdates.push({ key: "axon.budget", value: budget.toString() });
-  const active = body.active === false ? false : budgetProvided || body.active === true ? true : agent.active;
-  if (active !== agent.active)
-    textUpdates.push({ key: "axon.active", value: String(active) });
-  if (body.active !== false && allow && typeof allow === "object" && !Array.isArray(allow)) {
-    for (const fn of FUNCTIONS) {
-      const desired = (allow as Record<string, unknown>)[fn.id];
-      if (typeof desired !== "boolean") continue;
-      const id = `${COUNTER.toLowerCase()}:${fn.selector.toLowerCase()}`;
-      if (desired) entries.set(id, { target: COUNTER, selector: fn.selector });
-      else entries.delete(id);
-    }
-    if (entries.size !== agent.allowlist.length || agent.allowlist.some(
-      (entry) => !entries.has(`${entry.target.toLowerCase()}:${entry.selector.toLowerCase()}`),
-    )) {
-      textUpdates.push({
-        key: "axon.allowlist",
-        value: [...entries.values()].map(({ target, selector }) => `${target}:${selector}`).join(","),
-      });
-    }
-  }
-  if (textUpdates.length) textUpdates.push({ key: "axon.version", value: (agent.version + 1n).toString() });
-  if (!resolved) textUpdates.push({ key: "axon.account", value: account });
-
-  // Check the ENS writes before changing the effective devnet grant.
-  for (const { key, value } of textUpdates) {
-    await ensPublicClient.simulateContract({
-      account: ownerWallet.account!,
-      address: ENS_REGISTRY,
-      abi: ENS_TEXT_ABI,
-      functionName: "setText",
-      args: [agentName, key, value],
-    });
-  }
-  txs.push(...await writePermissions(body, account, agent.agentKey ?? undefined));
-  for (const { key, value } of textUpdates) {
-    const hash = await ownerWallet.writeContract({
-      chain: sepolia,
-      account: ownerWallet.account!,
-      address: ENS_REGISTRY,
-      abi: ENS_TEXT_ABI,
-      functionName: "setText",
-      args: [agentName, key, value],
-      gas: 1_000_000n,
-    });
-    const receipt = await ensPublicClient.waitForTransactionReceipt({ hash, timeout: 0 });
-    if (receipt.status !== "success") throw new Error(`ENS update reverted for ${key}: ${hash}`);
-    txs.push({ label: `ENS text ${key}=${value} for ${agentName}`, hash });
-  }
-
-  agentStore.save(normalize(HUMAN_ENS_NAME), agentName, resolved ? undefined : txs.at(-1)?.hash);
-
+  const agent = await resolveAgentIdentity(agentName);
+  if (!agent) throw new Error(`Agent ${agentName} has no Sepolia account binding. Register it first.`);
+  const txs = await writePermissions(body, agent.account, agent.agentKey);
+  agentStore.save(normalize(HUMAN_ENS_NAME), agentName);
   return { ok: true, txs, state: await readState() };
 }
 
@@ -1355,7 +1250,7 @@ const server = createServer(async (req, res) => {
 
       let agentContext: { name: string; account: Address; permissions: unknown } | null = null;
       if (lane === "agent" && agentName) {
-        const resolved = await resolveAgentFromEns(agentName);
+        const resolved = await readNamedAgent(agentName);
         if (!resolved?.account || !isAddress(resolved.account, { strict: false }))
           throw new Error(`Agent ${agentName} has no valid devnet account in its Sepolia records.`);
         agentContext = {
@@ -1404,7 +1299,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/ens/resolve") {
       const name = url.searchParams.get("name");
       if (!name) throw new Error("name query parameter is required");
-      const resolved = await resolveAgentFromEns(name);
+      const resolved = await readNamedAgent(name);
       if (!resolved) {
         json(res, 404, { ok: false, error: `ENS name ${name} not resolvable or has no axon records` });
         return;
@@ -1428,7 +1323,7 @@ const server = createServer(async (req, res) => {
       const subs = agentStore.names(normalize(name));
       const resolved = await Promise.all(
         subs.map(async (sub) => {
-          const agent = await resolveAgentFromEns(sub);
+          const agent = await readNamedAgent(sub);
           return {
             name: sub,
             ...(agent
@@ -1450,12 +1345,9 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/ens/register") {
       const body = await readBody(req);
-      const { subdomain, budgetEth } = body as {
-        subdomain?: string;
-        budgetEth?: string;
-      };
-      if (!subdomain || !budgetEth)
-        throw new Error("subdomain and budgetEth are required");
+      const { subdomain } = body;
+      if (typeof subdomain !== "string" || !subdomain.trim())
+        throw new Error("subdomain is required");
       if (!ensOwnerWallet || !ensPublicClient)
         throw new Error("ENS Sepolia client not configured");
 
@@ -1477,17 +1369,10 @@ const server = createServer(async (req, res) => {
 
       const parent = HUMAN_ENS_NAME ?? subdomain.split(".").slice(-2).join(".");
       const fullName = normalize(`${subdomain}.${parent}`);
-      const budget = parseEther(String(budgetEth));
-      if (budget <= 0n) throw new Error("budget must be greater than 0");
-
       const textRecords = [
         { key: "axon.dnsName", value: fullName },
         { key: "axon.account", value: agentAccount },
         { key: "axon.agentKey", value: agentKey },
-        { key: "axon.active", value: "true" },
-        { key: "axon.budget", value: budget.toString() },
-        { key: "axon.version", value: "1" },
-        { key: "axon.allowlist", value: "" },
       ];
 
       if (activeEnsRegistrations.has(fullName))

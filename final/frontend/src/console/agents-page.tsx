@@ -9,7 +9,6 @@ import { useConsole } from "./model"
 export function AgentsPage() {
   const { state, ens, refreshEns, worldIdStatus, worldIdSkipped, skipWorldId, takeWorldIdProof, verifyWorldId } = useConsole()
   const [subdomain, setSubdomain] = useState("")
-  const [budgetEth, setBudgetEth] = useState("0.05")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
   const [createdAgent, setCreatedAgent] = useState<string>()
@@ -43,7 +42,6 @@ export function AgentsPage() {
     try {
       const result = await registerEnsAgent({
         subdomain: subdomain.trim(),
-        budgetEth: budgetEth.trim(),
         agentKey: "",
         agentAccount: "",
         worldIdProof: takeWorldIdProof(),
@@ -167,16 +165,10 @@ export function AgentsPage() {
               Registration requires a parent ENS name on the server.
             </p>
           )}
-          <label htmlFor="create-budget">
-            Budget per epoch (ETH)
-            <input
-              id="create-budget"
-              value={budgetEth}
-              onChange={(event) => setBudgetEth(event.target.value)}
-              inputMode="decimal"
-              required
-            />
-          </label>
+          <p className="console-help">
+            This name uses the configured devnet account and its existing grant.
+            Edit the grant on the Permissions page.
+          </p>
           <div className="console-worldid-row">
             <Button
               type="button"
@@ -212,7 +204,6 @@ export function AgentsPage() {
               !registrationParent ||
               submitting ||
               !subdomain.trim() ||
-              !budgetEth.trim() ||
               worldIdStatus !== "verified"
             }
           >
