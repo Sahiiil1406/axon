@@ -1,5 +1,7 @@
 import type { IDKitResultSession } from "@worldcoin/idkit"
 
+export type WorldIdProof = IDKitResultSession | "local-test-skip"
+
 export type Lane = "human" | "agent"
 export type FunctionId = "increment" | "pay" | "payAmount"
 export type WorldIdStatus = "not-verified" | "verifying" | "verified" | "failed"
@@ -74,6 +76,7 @@ export interface Simulation {
 export interface Admission {
   id: number
   outcome: string
+  frameStatuses?: string[]
   passed?: number
   failed?: number
   checks: {
@@ -121,6 +124,7 @@ export interface AgentInfo {
   version: string
   allowlist: AgentAllowlistEntry[]
   unresolved?: boolean
+  localPolicy?: { budget: string; allow: Record<FunctionId, boolean> }
 }
 export interface EnsState {
   humanName: string | null
@@ -128,6 +132,7 @@ export interface EnsState {
 }
 export interface ConsoleState {
   ok: boolean
+  worldIdTestSkip?: boolean
   worldId?: { appId: string } | { error: string } | null
   checkedAt: string
   network: {
@@ -205,7 +210,7 @@ export interface OwnerTransaction {
 }
 export interface PermissionInput {
   agentName?: string
-  worldIdProof?: IDKitResultSession
+  worldIdProof?: WorldIdProof
   budgetEth?: string
   allow?: Record<FunctionId, boolean>
   active?: boolean

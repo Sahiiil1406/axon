@@ -1,4 +1,4 @@
-import { IDKitSessionWidget, CredentialRequest, type IDKitResultSession, type RpContext } from "@worldcoin/idkit"
+import { IDKitSessionWidget, CredentialRequest, type RpContext } from "@worldcoin/idkit"
 import { Link, Outlet, useLocation } from "react-router-dom"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
@@ -41,6 +41,7 @@ import type {
   PermissionInput,
   Tone,
   WorldIdStatus,
+  WorldIdProof,
 } from "./types"
 import "./console.css"
 
@@ -58,7 +59,7 @@ export default function ConsoleApp() {
   >([])
   const [ens, setEns] = useState<EnsState>({ humanName: null, agents: [] })
   const [ensLoading, setEnsLoading] = useState(false)
-  const [worldIdProof, setWorldIdProof] = useState<IDKitResultSession>()
+  const [worldIdProof, setWorldIdProof] = useState<WorldIdProof>()
   const [worldIdContext, setWorldIdContext] = useState<RpContext>()
   const [worldIdOpen, setWorldIdOpen] = useState(false)
   const [worldIdStatus, setWorldIdStatus] = useState<WorldIdStatus>(
@@ -75,6 +76,7 @@ export default function ConsoleApp() {
   const writing = useRef(false)
   const ingest = useCallback((next: ConsoleState) => {
     setState(next)
+    setEns(next.ens ?? { humanName: null, agents: [] })
     setLast(() => {
       const merged: Partial<Record<Lane, CallResult>> = {}
       for (const lane of ["human", "agent"] as const) {
@@ -113,12 +115,11 @@ export default function ConsoleApp() {
   useEffect(() => {
     let mounted = true
     queueMicrotask(() => { if (mounted) void refresh() })
-    queueMicrotask(() => { if (mounted) void refreshEns() })
     return () => {
       mounted = false
       requestVersion.current++
     }
-  }, [refresh, refreshEns])
+  }, [refresh])
   const call = async (
     lane: Lane,
     fn: FunctionId,
@@ -229,6 +230,15 @@ export default function ConsoleApp() {
       setBusy(null)
     }
   }
+  const worldIdSkipped = worldIdProof === "local-test-skip"
+  const skipWorldId = () => {
+    if (!state?.worldIdTestSkip) return
+    setWorldIdOpen(false)
+    setWorldIdProof("local-test-skip")
+    setWorldIdStatus("verified")
+    setNotice(null)
+  }
+
   const worldId = state?.worldId
   const verifyWorldId = async () => {
     if (!state) return false
@@ -285,6 +295,8 @@ export default function ConsoleApp() {
         ens,
         ensLoading,
         worldIdStatus,
+        worldIdSkipped,
+        skipWorldId,
         takeWorldIdProof,
         callRestrictions,
         setCallRestriction,
@@ -351,7 +363,7 @@ export default function ConsoleApp() {
               className={`console-worldid-dot ${worldIdStatus}`}
             />
             <span className="console-worldid-label">
-              World ID: {worldIdStatus === "verified" ? "Verified" : worldIdStatus}
+              World ID: {worldIdSkipped ? "Skipped for testing" : worldIdStatus === "verified" ? "Verified" : worldIdStatus}
             </span>
             <Link className="console-back" to="/">
               <ArrowLeft size={13} /> Back to site

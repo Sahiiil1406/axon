@@ -6,3 +6,6 @@ cache/
 broadcast/
 *.log
 .DS_Store
+
+/final/server/agent-registrations.json
+/final/server/agent-registrations.json.*.tmp

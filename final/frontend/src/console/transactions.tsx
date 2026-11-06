@@ -208,6 +208,7 @@ export function Receipt({
                     "Sidecar admission",
                     result.admission?.outcome ?? "Not available",
                   ],
+                  ["Included frame statuses", result.admission?.frameStatuses?.join(" → ") ?? "Not available"],
                   [
                     "Preflight",
                     result.preflight

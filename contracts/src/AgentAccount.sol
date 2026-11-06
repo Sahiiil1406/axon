@@ -36,6 +36,8 @@ contract AgentAccount {
     bytes32 internal constant E_NONCE = "E_NONCE";
     bytes32 internal constant E_TARGET_DENIED = "E_TARGET_DENIED";
     bytes32 internal constant E_EPOCH_BUDGET = "E_EPOCH_BUDGET";
+    bytes32 internal constant E_FRAME_SHAPE = "E_FRAME_SHAPE";
+    bytes32 internal constant E_SPEND_VALUE = "E_SPEND_VALUE";
     bytes32 internal constant E_BAD_SIG = "E_BAD_SIG";
     bytes32 internal constant E_SIGPARAM_FAILED = "E_SIGPARAM_FAILED";
     bytes32 internal constant E_NOT_FRAME = "E_NOT_FRAME";
@@ -65,6 +67,7 @@ contract AgentAccount {
     ///      `ecrecover` precompile, which this devnet's validation trace rejects because
     ///      its precompile list is empty.
     address public immutable signerProbe;
+    address public immutable frameProbe;
 
     /// @dev Signature index of the agent witness. Entry 0 is the agent's SECP256K1
     ///      signature; entry 1 is the sender's ARBITRARY entry. Reordering the list
@@ -119,6 +122,17 @@ contract AgentAccount {
         require(p != address(0), "signer probe deploy failed");
         signerProbe = p;
 
+        // Return frame count, frame 1 target/mode/flags/value/length, calldata hash,
+        // signature message and canonical signature hash. The calldata argument
+        // bounds the copy to the expected execute payload length.
+        bytes memory frameInit = hex"6051600c60003960516000f36009b05f525f6001b360205260026001b360405260036001b360605260086001b360805260046001b360a05260015f355f610140b25f356101402060c05260025fb460e0526008b0610100526101205ff3";
+        address f;
+        assembly {
+            f := create(0, add(frameInit, 0x20), mload(frameInit))
+        }
+        require(f != address(0), "frame probe deploy failed");
+        frameProbe = f;
+
         registry_.registerAccount(owner_);
     }
 
@@ -163,6 +177,8 @@ contract AgentAccount {
             })
         );
         if (!ok) revert Rejected(protocolReason);
+
+        _checkExecutionFrame(data);
 
         // Only now does the account commit.
         _approve(APPROVE_EXECUTION_AND_PAYMENT);
@@ -216,6 +232,7 @@ contract AgentAccount {
         if (i.grantHash != g.grantHash) return E_GRANT_STALE;
         if (i.nonce != intentNonce) return E_NONCE;
         if (!_allowed(i.target, i.selector)) return E_TARGET_DENIED;
+        if (i.spend < i.value) return E_SPEND_VALUE;
 
         return OK;
     }
@@ -312,6 +329,19 @@ contract AgentAccount {
             signerProbe.delegatecall(abi.encode(SIGPARAM_RESOLVED_SIGNER, index));
         if (!ok || ret.length < 32) revert Rejected(E_SIGPARAM_FAILED);
         signer = abi.decode(ret, (address));
+    }
+
+    function _checkExecutionFrame(bytes calldata data) internal {
+        bytes memory expected = abi.encodeCall(this.execute, (data));
+        (bool ok, bytes memory result) = frameProbe.delegatecall(abi.encode(expected.length));
+        if (!ok || result.length != 288) revert Rejected(E_FRAME_SHAPE);
+        (
+            uint256 count, address target, uint256 mode, uint256 flags, uint256 value,
+            uint256 length, bytes32 dataHash, bytes32 signedMessage, bytes32 canonicalHash
+        ) = abi.decode(result, (uint256, address, uint256, uint256, uint256, uint256, bytes32, bytes32, bytes32));
+        if (count != 2 || target != address(this) || mode != 2 || flags != 0 || value != 0
+            || length != expected.length || dataHash != keccak256(expected)) revert Rejected(E_FRAME_SHAPE);
+        if (signedMessage != bytes32(0) && signedMessage != canonicalHash) revert Rejected(E_BAD_SIG);
     }
 
     /// @dev EIP-8141 `APPROVE` (0xaa), via the stub. Exits the delegatecall frame and

@@ -3,12 +3,11 @@ import { ChevronRight, File, Folder, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { registerEnsAgent } from "./api"
 import { Badge, ChainLink, CopyButton, DefinitionList, PageHeading, Panel } from "./components"
-import { demoParent, demoNames } from "./demo-agents"
 import { eth } from "./format"
 import { useConsole } from "./model"
 
 export function AgentsPage() {
-  const { state, ens, refreshEns, worldIdStatus, takeWorldIdProof, verifyWorldId } = useConsole()
+  const { state, ens, refreshEns, worldIdStatus, worldIdSkipped, skipWorldId, takeWorldIdProof, verifyWorldId } = useConsole()
   const [subdomain, setSubdomain] = useState("")
   const [budgetEth, setBudgetEth] = useState("0.05")
   const [submitting, setSubmitting] = useState(false)
@@ -19,10 +18,10 @@ export function AgentsPage() {
   const registeredAgents = new Map(
     [...(state?.ens?.agents ?? []), ...ens.agents].map((agent) => [agent.name, agent])
   )
-  const agentNames = [...new Set([...demoNames, ...registeredAgents.keys(), ...Object.keys(registrations)])]
+  const agentNames = [...new Set([...registeredAgents.keys(), ...Object.keys(registrations)])]
   const agentsByParent = new Map<string, string[]>()
   for (const name of agentNames) {
-    const parent = demoNames.includes(name) ? demoParent : registrationParent ?? name.split(".").slice(1).join(".")
+    const parent = registrationParent ?? name.split(".").slice(1).join(".")
     const children = agentsByParent.get(parent) ?? []
     children.push(name)
     agentsByParent.set(parent, children)
@@ -57,7 +56,7 @@ export function AgentsPage() {
   return (
     <>
       <PageHeading eyebrow="ENS / AGENT IDENTITY" title="Agent subdomains">
-        Browse demo and registered agents under their ENS names.
+        Browse registered agents under their ENS names.
       </PageHeading>
 
       <Panel
@@ -65,6 +64,7 @@ export function AgentsPage() {
         title="Agent tree"
         action={<Badge tone="muted">{agentNames.length} {agentNames.length === 1 ? "agent" : "agents"}</Badge>}
       >
+        {!agentNames.length && <p className="console-help">No registered agents yet.</p>}
         <ul className="console-agent-tree">
           {[...agentsByParent].map(([parent, names]) => (
             <li key={parent}>
@@ -78,7 +78,6 @@ export function AgentsPage() {
                   {names.map((name) => {
                     const agent = registeredAgents.get(name)
                     const hash = registrations[name] ?? agent?.registrationTxHash
-                    const isDemo = demoNames.includes(name) && !agent && !Object.hasOwn(registrations, name)
                     return (
                       <li key={name}>
                         <details className="console-agent-file">
@@ -86,7 +85,7 @@ export function AgentsPage() {
                             <ChevronRight size={13} className="console-agent-chevron" />
                             <File size={15} />
                             <span className="console-agent-name">{name}</span>
-                            {isDemo ? <Badge tone="muted">Demo</Badge> : <a
+                            <a
                               className="console-chain-link"
                               href={hash
                                 ? `https://sepolia.etherscan.io/tx/${encodeURIComponent(hash)}`
@@ -96,7 +95,7 @@ export function AgentsPage() {
                               onClick={(event) => event.stopPropagation()}
                             >
                               {hash ? "Sepolia transaction" : "View on ENS"}
-                            </a>}
+                            </a>
                           </summary>
                           <div className="console-agent-file-details">
                             <CopyButton value={name} label="Copy name" />
@@ -154,7 +153,13 @@ export function AgentsPage() {
             >
               {worldIdStatus === "verifying" ? "Verifying…" : "Verify with World ID"}
             </Button>
-            {worldIdStatus === "verified" && <Badge tone="good">Proof ready</Badge>}
+            {state?.worldIdTestSkip && worldIdStatus !== "verified" && (
+              <Button type="button" variant="outline" onClick={skipWorldId}
+                disabled={!registrationParent || submitting || worldIdStatus === "verifying"}>
+                Skip World ID for testing
+              </Button>
+            )}
+            {worldIdStatus === "verified" && <Badge tone="good">{worldIdSkipped ? "Skipped for testing" : "Proof ready"}</Badge>}
           </div>
           {error && <p className="console-inline-error" role="alert">{error}</p>}
           {createdAgent && <p role="status">Registered {createdAgent}.</p>}

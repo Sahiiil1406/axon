@@ -108,7 +108,7 @@ export interface SimulateResult {
   prefixShape: string | null;
 }
 
-export type IntentStatus = "New" | "Pending" | "OnChain" | "Finalized" | "Reverted" | "Cancelled";
+export type IntentStatus = "New" | "Pending" | "Submitted" | "OnChain" | "Finalized" | "Reverted" | "Cancelled";
 
 export interface SubmitResult {
   hash: Hex;
@@ -120,6 +120,7 @@ export interface SubmitResult {
 export interface ExplorerAdmission {
   id: number;
   outcome: string;
+  frameStatuses?: string[];
   checks: { rule: string; verdict: string; frameIndex?: number; entity?: string; reason?: string }[];
 }
 

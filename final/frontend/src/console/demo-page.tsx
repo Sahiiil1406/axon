@@ -89,6 +89,7 @@ function LaneCard({
                   result?.frames ?? result?.simulation?.frames?.length ?? "—",
                 ],
                 ["Admission", result?.admission?.outcome ?? "Not available"],
+                ["Frame results", result?.admission?.frameStatuses?.join(" → ") ?? "—"],
               ] as [string, React.ReactNode][])
             : []),
         ]}

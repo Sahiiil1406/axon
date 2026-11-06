@@ -1,4 +1,3 @@
-import type { IDKitResultSession } from "@worldcoin/idkit"
 import { createContext, useContext } from "react"
 import type {
   AgentInfo,
@@ -12,6 +11,7 @@ import type {
   PermissionInput,
   Tone,
   WorldIdStatus,
+  WorldIdProof,
 } from "./types"
 export interface ConsoleModel {
   state: ConsoleState | null
@@ -23,8 +23,10 @@ export interface ConsoleModel {
   ownerTransactions: OwnerTransaction[]
   ens: EnsState
   ensLoading: boolean
-  takeWorldIdProof: () => IDKitResultSession | undefined
+  takeWorldIdProof: () => WorldIdProof | undefined
   worldIdStatus: WorldIdStatus
+  worldIdSkipped: boolean
+  skipWorldId: () => void
   callRestrictions: CallRestrictions
   refresh: () => Promise<void>
   refreshEns: () => Promise<void>

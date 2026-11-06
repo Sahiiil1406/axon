@@ -65,6 +65,8 @@ export function resultStatus(result?: CallResult | null): {
           : "Success",
       tone: "good",
     }
+  if (result.hash && ["New", "Pending", "Submitted"].includes(result.status ?? ""))
+    return { label: "Awaiting inclusion", tone: "warn" }
   if (result.preflight?.ok === false)
     return { label: result.preflight.code ?? "Blocked", tone: "bad" }
   return {
@@ -73,6 +75,7 @@ export function resultStatus(result?: CallResult | null): {
   }
 }
 export function failureReason(result: CallResult) {
+  if (result.error?.startsWith("Alt-mempool rejected")) return result.error
   return result.preflight?.ok === false
     ? `${result.preflight.code ?? "Blocked"}${result.preflight.message ? `: ${result.preflight.message}` : ""}`
     : (result.error ??

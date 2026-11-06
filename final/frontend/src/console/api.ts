@@ -1,6 +1,7 @@
-import type { IDKitResultSession, RpContext } from "@worldcoin/idkit"
+import type { RpContext } from "@worldcoin/idkit"
 import type {
   AgentAllowlistEntry,
+  WorldIdProof,
   CallPayload,
   ConsoleState,
   EnsState,
@@ -94,7 +95,7 @@ export const updatePermission = (input: PermissionInput) =>
   request<PermissionPayload>("/api/permission", {
     method: "POST",
     body: JSON.stringify(input),
-  })
+  }, base, input.agentName ? 0 : undefined)
 
 export const fetchEnsState = async (): Promise<EnsState> => {
   const state = await request<ConsoleState>("/api/state")
@@ -120,7 +121,7 @@ export const registerEnsAgent = (input: {
   agentKey: string
   agentAccount: string
   budgetEth: string
-  worldIdProof?: IDKitResultSession
+  worldIdProof?: WorldIdProof
 }) =>
   request<{ ok: true; agent: string; txs: Array<{ label: string; hash: string }> }>(
     "/api/ens/register",

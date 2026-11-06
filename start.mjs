@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
@@ -56,6 +57,20 @@ async function available(value) {
   });
 }
 
+async function waitForService(label, url, accepts) {
+  const deadline = Date.now() + 15_000;
+  while (!stopping && Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      if (response.ok && await accepts(response)) return;
+    } catch {
+      // The process may still be starting.
+    }
+    await delay(250);
+  }
+  throw new Error(`${label} did not become ready at ${url}. Check its startup output above.`);
+}
+
 try {
   if (apiPort === frontendPort) throw new Error('Backend and frontend need different ports.');
   await available(apiPort);
@@ -71,15 +86,19 @@ try {
   }
   if (!stopping) {
     const api = run('final/server', ['run', 'dev'], {
-      FINAL_HOST: '127.0.0.1', FINAL_PORT: String(apiPort),
+      FINAL_HOST: '127.0.0.1', FINAL_PORT: String(apiPort), FINAL_API_ONLY: 'true',
       AXON_FRONTEND_ORIGINS: `http://localhost:${frontendPort},http://127.0.0.1:${frontendPort}`,
     });
     api.once('exit', code => { if (!stopping) stop(code || 1); });
+    await waitForService('Axon API', `http://127.0.0.1:${apiPort}/api/ready`,
+      async response => (await response.json()).service === 'axon-api');
     const frontend = run('final/frontend', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(frontendPort), '--strictPort'], {
       VITE_AXON_API_URL: `http://127.0.0.1:${apiPort}`,
     });
     frontend.once('exit', code => { if (!stopping) stop(code || 1); });
-    console.log(`\nAxon:    http://localhost:${frontendPort}\nConsole: http://localhost:${frontendPort}/app\nAPI:     http://127.0.0.1:${apiPort}\n\nPress Ctrl+C to stop both services.\n`);
+    await waitForService('Axon frontend', `http://127.0.0.1:${frontendPort}/`,
+      response => response.headers.get('content-type')?.includes('text/html'));
+    console.log(`\nAxon:    http://127.0.0.1:${frontendPort}\nConsole: http://127.0.0.1:${frontendPort}/app\nAPI:     http://127.0.0.1:${apiPort}\n\nPress Ctrl+C to stop both services.\n`);
   }
 } catch (error) {
   console.error(`Startup failed: ${error.message}`);

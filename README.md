@@ -37,8 +37,8 @@ With Node.js 24 and npm installed, run from the repository root:
 
 This installs missing SDK, server, and frontend dependencies, then starts the API
 and Vite with automatic reload. Open <http://localhost:5173> or
-<http://localhost:5173/app>. The API runs on port 8900; frontend API requests are
-proxied to it. Press Ctrl+C to stop both services.
+<http://localhost:5173/app>. The API runs on port 8900 and serves JSON only when launched with this script.
+The frontend sends API requests directly to it. Press Ctrl+C to stop both services.
 
 The server uses the existing `.env` configuration and `final/deployment.json`.
 The configured devnet RPC and sidecar run remotely. Starting the app does not
@@ -50,7 +50,7 @@ redeploy contracts or execute agent transactions.
 # ENSv2 on Sepolia — agent identity & control plane
 SEPOLIA_RPC=https://sepolia.infura.io/v3/YOUR_KEY
 SEPOLIA_OWNER_PRIVATE_KEY=0x...          # owner key for ENS text record updates
-ENS_REGISTRY=0x...                        # Sepolia ENS Registry address
+ENS_REGISTRY=0x...                        # Axon AgentNameRegistry deployed on Sepolia
 HUMAN_ENS_NAME=alice.eth                  # human parent name
 
 # World ID Agent Pass — human approval gate for authority changes

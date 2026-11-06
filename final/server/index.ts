@@ -22,6 +22,8 @@ import { fileURLToPath } from "node:url";
 import {
   createPublicClient,
   createWalletClient,
+  decodeErrorResult,
+  hexToString,
   encodeAbiParameters,
   formatEther,
   http,
@@ -39,6 +41,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { getEnsText, normalize } from "viem/ens";
 import { AxonClient } from "@axon/sdk";
+import { openAgentStore } from "./agent-store.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(HERE, "..");
@@ -80,7 +83,11 @@ if (!RPC) throw new Error("RPC is required in the server environment or deployme
 if (!SIDECAR) throw new Error("SIDECAR is required in the server environment or deployment file");
 const CHAIN_ID = Number(process.env.CHAIN_ID ?? deployment.chainId ?? 1337);
 const PORT = Number(process.env.FINAL_PORT ?? process.env.PORT ?? 8900);
+const API_ONLY = process.env.FINAL_API_ONLY === "true";
 const HOST = process.env.FINAL_HOST ?? process.env.HOST ?? "127.0.0.1";
+const worldIdTestSkip = process.env.WORLD_ID_TEST_SKIP === "true" &&
+  process.env.NODE_ENV !== "production" &&
+  ["127.0.0.1", "localhost", "::1"].includes(HOST);
 if (!Number.isSafeInteger(CHAIN_ID) || CHAIN_ID <= 0) throw new Error("CHAIN_ID must be a positive integer");
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("FINAL_PORT must be between 1 and 65535");
 const EXPLORER = "https://altmempoolexplorer.forshtat.com/tx/";
@@ -160,8 +167,8 @@ const wallet = createWalletClient({
 });
 const publicClient = createPublicClient({ chain, transport: http(RPC) });
 
-const agentClient = new AxonClient({
-  account: ACCOUNT,
+const createAgentClient = (account: Address) => new AxonClient({
+  account,
   registry: REGISTRY,
   vault: COUNTER,
   oracle: COUNTER,
@@ -170,6 +177,7 @@ const agentClient = new AxonClient({
   rpc: RPC,
   sidecar: SIDECAR,
 });
+const agentClient = createAgentClient(ACCOUNT);
 
 const REGISTRY_ABI = [
   {
@@ -251,6 +259,13 @@ const REGISTRY_ABI = [
 ] as const satisfies Abi;
 
 const ENS_TEXT_ABI = [
+  {
+    type: "function",
+    name: "text",
+    stateMutability: "view",
+    inputs: [{ name: "name", type: "string" }, { name: "key", type: "string" }],
+    outputs: [{ type: "string" }],
+  },
   {
     type: "function",
     name: "setText",
@@ -425,13 +440,13 @@ async function readCounter() {
   };
 }
 
-async function readGrantRaw() {
+async function readGrantRaw(account = ACCOUNT) {
   const [grant, block] = await Promise.all([
     publicClient.readContract({
       address: REGISTRY,
       abi: REGISTRY_ABI,
       functionName: "current",
-      args: [ACCOUNT],
+      args: [account],
     }) as Promise<GrantStruct>,
     publicClient.getBlock({ blockTag: "latest" }),
   ]);
@@ -439,7 +454,7 @@ async function readGrantRaw() {
   const epoch =
     grant.epochLength > 0n ? block.timestamp / grant.epochLength : 0n;
   const spent = (await publicClient.readContract({
-    address: ACCOUNT,
+    address: account,
     abi: ACCOUNT_ABI,
     functionName: "spentInEpoch",
     args: [epoch],
@@ -480,14 +495,14 @@ function serializeGrant(
   };
 }
 
-async function readAllowlist() {
+async function readAllowlist(account = ACCOUNT) {
   const entries = await Promise.all(
     FUNCTIONS.map(async (fn) => {
       const allowed = (await publicClient.readContract({
         address: REGISTRY,
         abi: REGISTRY_ABI,
         functionName: "isAllowed",
-        args: [ACCOUNT, COUNTER, fn.selector],
+        args: [account, COUNTER, fn.selector],
       })) as boolean;
       return [fn.id, allowed] as const;
     }),
@@ -495,18 +510,28 @@ async function readAllowlist() {
   return Object.fromEntries(entries) as Record<FunctionId, boolean>;
 }
 
-// Agent subdomains created under a human ENS name (in-memory registry for the demo).
-// Key = parent name (e.g. "alice.eth"), value = agent subdomain names (e.g. ["trader.alice.eth"]).
-const agentSubdomains = new Map<string, string[]>();
-const agentRegistrationHashes = new Map<string, Hex>();
+const agentStore = openAgentStore(resolve(HERE, "agent-registrations.json"));
 const activeEnsRegistrations = new Set<string>();
 const pendingEnsRegistrationWrites = new Map<string, { hash: Hex; value: string }>();
 
 async function readEnsTextRecord(name: string, key: string): Promise<string | null> {
   if (!ensPublicClient) return null;
+  const normalizedName = normalize(name);
+  if (ENS_REGISTRY) {
+    try {
+      return await ensPublicClient.readContract({
+        address: ENS_REGISTRY,
+        abi: ENS_TEXT_ABI,
+        functionName: "text",
+        args: [normalizedName, key],
+      });
+    } catch {
+      // External resolvers can still be read through the universal resolver.
+    }
+  }
   try {
     return await getEnsText(ensPublicClient, {
-      name: normalize(name),
+      name: normalizedName,
       key,
     });
   } catch {
@@ -573,6 +598,7 @@ async function readState() {
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
+    worldIdTestSkip,
     worldId: worldIdError ? { error: worldIdError } : { appId: WORLD_ID_APP_ID },
     network: {
       chainId: CHAIN_ID,
@@ -612,13 +638,13 @@ async function readState() {
     history,
     ens: await (async () => {
       if (!HUMAN_ENS_NAME) return { humanName: null, agents: [] };
-      const subs = agentSubdomains.get(HUMAN_ENS_NAME) ?? [];
+      const subs = agentStore.names(normalize(HUMAN_ENS_NAME));
       const resolved = await Promise.all(
         subs.map(async (sub) => {
           const agent = await resolveAgentFromEns(sub);
           return {
             name: sub,
-            registrationTxHash: agentRegistrationHashes.get(sub),
+            registrationTxHash: agentStore.hash(sub),
             ...(agent
               ? {
                   account: agent.account,
@@ -628,7 +654,7 @@ async function readState() {
                   version: agent.version.toString(),
                   allowlist: agent.allowlist,
                 }
-              : { unresolved: true }),
+              : { unresolved: true, localPolicy: agentStore.policy(sub) }),
           };
         }),
       );
@@ -678,6 +704,7 @@ function summarizeAdmission(
   admission: {
     id: number;
     outcome: string;
+    frameStatuses?: string[];
     checks: {
       rule: string;
       verdict: string;
@@ -690,6 +717,7 @@ function summarizeAdmission(
   return {
     id: admission.id,
     outcome: admission.outcome,
+    frameStatuses: admission.frameStatuses,
     checks: admission.checks,
     passed: admission.checks.filter((c) => c.verdict === "pass").length,
     failed: admission.checks.filter(
@@ -785,12 +813,12 @@ async function humanCall(fnId: FunctionId, amountWei: bigint | null) {
   }
 }
 
-async function agentCall(fnId: FunctionId, amountWei: bigint | null) {
+async function agentCall(fnId: FunctionId, amountWei: bigint | null, account = ACCOUNT) {
   const fn = functionOf(fnId);
   const before = await readCounter();
-  const grantRaw = await readGrantRaw();
-  const grant = await agentClient.getGrant();
-  const allowlist = await readAllowlist();
+  const client = account === ACCOUNT ? agentClient : createAgentClient(account);
+  const [grantRaw, allowlist] = await Promise.all([readGrantRaw(account), readAllowlist(account)]);
+  const grant = grantRaw.grant;
 
   let value = 0n;
   let spend = 0n;
@@ -845,23 +873,26 @@ async function agentCall(fnId: FunctionId, amountWei: bigint | null) {
     args,
     value,
     spend,
-    nonce: await agentClient.getIntentNonce(),
+    nonce: await client.getIntentNonce(),
     deadline: grantRaw.blockTimestamp + 3600n,
     grantHash: grant.grantHash,
   };
 
+  let simulation: ReturnType<typeof summarizeSimulation> | undefined;
   try {
-    const prepared = await agentClient.prepare(intent);
-    const simulated = await agentClient.simulateIntent(intent, { prepared });
-    const simulation = summarizeSimulation(simulated.result);
-    const submitted = await agentClient.submitIntent(intent, { prepared });
+    const prepared = await client.prepare(intent);
+    const simulated = await client.simulateIntent(intent, { prepared });
+    simulation = summarizeSimulation(simulated.result);
+    const submitted = await client.submitIntent(intent, { prepared });
     const receipt = await getReceipt(submitted.hash);
-    const admission = await agentClient
+    const admission = summarizeAdmission(await client
       .getAdmission(submitted.hash)
-      .catch(() => null);
+      .catch(() => null));
     const after = await readCounter();
+    const included = receipt?.status === "success" || submitted.status === "OnChain" || submitted.status === "Finalized";
     const ok =
-      submitted.status === "OnChain" || submitted.status === "Finalized";
+      included && receipt?.status !== "reverted" &&
+      !admission?.frameStatuses?.some((status) => status === "failure" || status === "reverted");
 
     return {
       ok,
@@ -872,7 +903,7 @@ async function agentCall(fnId: FunctionId, amountWei: bigint | null) {
       status: submitted.status,
       blockNumber: receipt?.blockNumber ?? null,
       gasUsed: receipt?.gasUsed ?? null,
-      caller: ACCOUNT,
+      caller: account,
       frames: 2,
       value: value.toString(),
       valueEth: eth(value),
@@ -884,21 +915,36 @@ async function agentCall(fnId: FunctionId, amountWei: bigint | null) {
       after,
       preflight,
       simulation,
-      admission: summarizeAdmission(admission),
+      admission,
       explorer: `${EXPLORER}${submitted.hash}`,
       error: ok
         ? null
         : preflight.ok
-          ? "Frame transaction reverted"
+          ? simulation.executionError ?? (!included && ["New", "Pending", "Submitted"].includes(submitted.status)
+            ? "Accepted by the alt-mempool and awaiting inclusion."
+            : `Frame transaction status: ${receipt?.status ?? submitted.status}`)
           : `${preflight.code}: ${preflight.message}`,
     };
   } catch (error) {
+    let detail = message(error);
+    const denial = detail.match(/validation frame (\d+): reverted with data (0x[\da-f]+)/i);
+    if (denial) {
+      try {
+        const { args } = decodeErrorResult({
+          abi: parseAbi(["error Rejected(bytes32 reason)"]),
+          data: denial[2] as Hex,
+        });
+        detail = `Alt-mempool rejected VERIFY frame ${denial[1]}: ${hexToString(args[0]).replace(/\0+$/, "")}`;
+      } catch {
+        // Keep the original sidecar diagnostic for other revert types.
+      }
+    }
     return {
       ok: false,
       lane: "agent" as Lane,
       function: fnId,
       signature: fn.signature,
-      error: message(error),
+      error: detail,
       before,
       grant: serializeGrant(
         grantRaw.grant,
@@ -907,14 +953,24 @@ async function agentCall(fnId: FunctionId, amountWei: bigint | null) {
         grantRaw.spent,
       ),
       preflight,
+      simulation,
     };
   }
 }
 
-async function updatePermission(body: Record<string, unknown>) {
-  const { grant, blockTimestamp } = await readGrantRaw();
+async function writePermissions(body: Record<string, unknown>, account: Address, expectedAgentKey?: Address) {
+  const [grant, block] = await Promise.all([
+    publicClient.readContract({
+      address: REGISTRY, abi: REGISTRY_ABI, functionName: "current", args: [account],
+    }) as Promise<GrantStruct>,
+    publicClient.getBlock({ blockTag: "latest" }),
+  ]);
+  if (grant.owner.toLowerCase() !== owner.address.toLowerCase())
+    throw new Error("The agent account has no grant owned by this server on the current devnet.");
+  if (expectedAgentKey && grant.agentKey.toLowerCase() !== expectedAgentKey.toLowerCase())
+    throw new Error("The ENS agent key does not match this account’s devnet grant.");
   const txs: { label: string; hash: Hex }[] = [];
-  const now = blockTimestamp;
+  const now = block.timestamp;
 
   const budgetProvided =
     body.budgetEth != null && String(body.budgetEth).trim() !== "";
@@ -930,12 +986,13 @@ async function updatePermission(body: Record<string, unknown>) {
       address: REGISTRY,
       abi: REGISTRY_ABI,
       functionName: "revoke",
-      args: [ACCOUNT],
+      args: [account],
       gas: 1_000_000n,
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`Permission transaction reverted: ${hash}`);
     txs.push({ label: "revoke grant", hash });
-    return { ok: true, txs, state: await readState() };
+    return txs;
   }
 
   const budgetChanged = budget !== grant.budgetPerEpoch;
@@ -954,7 +1011,7 @@ async function updatePermission(body: Record<string, unknown>) {
       abi: REGISTRY_ABI,
       functionName: "grantAgent",
       args: [
-        ACCOUNT,
+        account,
         grant.agentKey,
         keyScheme,
         budget,
@@ -963,7 +1020,8 @@ async function updatePermission(body: Record<string, unknown>) {
       ],
       gas: 1_000_000n,
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`Permission transaction reverted: ${hash}`);
     txs.push({
       label: `grant ${eth(budget)} ETH / ${Number(epochLength)}s`,
       hash,
@@ -979,7 +1037,7 @@ async function updatePermission(body: Record<string, unknown>) {
         address: REGISTRY,
         abi: REGISTRY_ABI,
         functionName: "isAllowed",
-        args: [ACCOUNT, COUNTER, fn.selector],
+        args: [account, COUNTER, fn.selector],
       })) as boolean;
       if (current === Boolean(desired)) continue;
 
@@ -987,10 +1045,11 @@ async function updatePermission(body: Record<string, unknown>) {
         address: REGISTRY,
         abi: REGISTRY_ABI,
         functionName: desired ? "allow" : "disallow",
-        args: [ACCOUNT, COUNTER, fn.selector],
+        args: [account, COUNTER, fn.selector],
         gas: 1_000_000n,
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`Permission transaction reverted: ${hash}`);
       txs.push({
         label: `${desired ? "allow" : "disallow"} ${fn.signature}`,
         hash,
@@ -998,14 +1057,22 @@ async function updatePermission(body: Record<string, unknown>) {
     }
   }
 
-  return { ok: true, txs, state: await readState() };
+  return txs;
 }
 
 // -------------------------------------------------------------------
 // World ID Agent Pass — human approval gate for authority changes
 // -------------------------------------------------------------------
 
-async function verifyWorldIdProof(proof: unknown): Promise<{ valid: boolean; reason?: string }> {
+async function verifyWorldIdProof(proof: unknown, req: IncomingMessage): Promise<{ valid: boolean; reason?: string }> {
+  if (proof === "local-test-skip") {
+    const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+    const origin = req.headers.origin;
+    const localOrigin = !origin || /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin);
+    return worldIdTestSkip && loopback && localOrigin
+      ? { valid: true }
+      : { valid: false, reason: "World ID test skip is unavailable for this request." };
+  }
   if (worldIdError) return { valid: false, reason: worldIdError };
   if (!proof || typeof proof !== "object")
     return { valid: false, reason: "Complete the World ID prompt before submitting." };
@@ -1046,23 +1113,32 @@ async function updatePermissionForAgent(
   body: Record<string, unknown>,
   agentName: string,
 ): Promise<{ ok: boolean; txs: { label: string; hash: Hex }[]; state: unknown }> {
-  if (!agentName || typeof agentName !== "string") {
-    throw new Error("agentName is required");
-  }
+  agentName = normalize(agentName);
+  if (!HUMAN_ENS_NAME || !agentName.endsWith(`.${normalize(HUMAN_ENS_NAME)}`))
+    throw new Error("Select an agent under the configured ENS parent.");
 
   if (!ensOwnerWallet || !ensPublicClient) {
     throw new Error("ENS Sepolia client not configured on the server");
   }
   if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
+  if (!await ensPublicClient.getCode({ address: ENS_REGISTRY }))
+    throw new Error("ENS_REGISTRY has no contract code on Sepolia. Configure a deployed resolver before saving permissions.");
   const ownerWallet = ensOwnerWallet;
 
   const txs: { label: string; hash: Hex }[] = [];
 
-  // Resolve the agent's current account from ENS (to sync the devnet registry).
-  const agent = await resolveAgentFromEns(agentName);
-  if (!agent || !agent.account) {
-    throw new Error(`Agent ${agentName} not resolvable on ENSv2`);
-  }
+  const resolved = await resolveAgentFromEns(agentName);
+  if (!resolved && (!agentStore.names(normalize(HUMAN_ENS_NAME)).includes(agentName) || body.active === false))
+    throw new Error(`Agent ${agentName} has no registered Axon records.`);
+  const agent = resolved ?? {
+    account: ACCOUNT,
+    agentKey: privateKeyToAccount(AGENT_PK).address,
+    active: false,
+    budget: 0n,
+    version: 0n,
+    allowlist: [],
+  };
+  if (!agent.account) throw new Error("Agent record has no devnet account.");
 
   const budgetProvided =
     body.budgetEth != null && String(body.budgetEth).trim() !== "";
@@ -1073,27 +1149,55 @@ async function updatePermissionForAgent(
     if (budget > 2n ** 128n - 1n) throw new Error("budget exceeds uint128");
   }
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const expiresAt = agent.version > 0 ? now + 7n * 86_400n : now + 7n * 86_400n;
-  const newVersion = agent.version + 1n;
-
-  // 1. Update ENS text records on the agent's Permissioned Resolver (Sepolia).
+  const account = getAddress(agent.account);
+  const allow = body.allow;
+  const entries = new Map(agent.allowlist.map((entry) => [
+    `${entry.target.toLowerCase()}:${entry.selector.toLowerCase()}`, entry,
+  ]));
   const textUpdates: Array<{ key: string; value: string }> = [];
-  if (budgetProvided) textUpdates.push({ key: "axon.budget", value: budget.toString() });
-  if (body.active != null) textUpdates.push({ key: "axon.active", value: Boolean(body.active) ? "true" : "false" });
-  textUpdates.push({ key: "axon.version", value: newVersion.toString() });
-
-  // Allowlist: encode as "target:selector,target:selector"
-  if (body.allowlist && Array.isArray(body.allowlist)) {
-    const entries = (body.allowlist as Array<{ target: string; selector: string }>).filter(
-      (a) => a.target && a.selector && isAddress(a.target),
+  if (!resolved) {
+    if (!budgetProvided) throw new Error("Set an initial budget for this agent.");
+    textUpdates.push(
+      { key: "axon.dnsName", value: agentName },
+      { key: "axon.agentKey", value: agent.agentKey! },
     );
-    textUpdates.push({
-      key: "axon.allowlist",
-      value: entries.map((e) => `${e.target}:${e.selector}`).join(","),
+  }
+  if (budgetProvided && budget !== agent.budget)
+    textUpdates.push({ key: "axon.budget", value: budget.toString() });
+  const active = body.active === false ? false : budgetProvided || body.active === true ? true : agent.active;
+  if (active !== agent.active)
+    textUpdates.push({ key: "axon.active", value: String(active) });
+  if (body.active !== false && allow && typeof allow === "object" && !Array.isArray(allow)) {
+    for (const fn of FUNCTIONS) {
+      const desired = (allow as Record<string, unknown>)[fn.id];
+      if (typeof desired !== "boolean") continue;
+      const id = `${COUNTER.toLowerCase()}:${fn.selector.toLowerCase()}`;
+      if (desired) entries.set(id, { target: COUNTER, selector: fn.selector });
+      else entries.delete(id);
+    }
+    if (entries.size !== agent.allowlist.length || agent.allowlist.some(
+      (entry) => !entries.has(`${entry.target.toLowerCase()}:${entry.selector.toLowerCase()}`),
+    )) {
+      textUpdates.push({
+        key: "axon.allowlist",
+        value: [...entries.values()].map(({ target, selector }) => `${target}:${selector}`).join(","),
+      });
+    }
+  }
+  if (textUpdates.length) textUpdates.push({ key: "axon.version", value: (agent.version + 1n).toString() });
+  if (!resolved) textUpdates.push({ key: "axon.account", value: account });
+
+  // Check the ENS writes before changing the effective devnet grant.
+  for (const { key, value } of textUpdates) {
+    await ensPublicClient.simulateContract({
+      account: ownerWallet.account!,
+      address: ENS_REGISTRY,
+      abi: ENS_TEXT_ABI,
+      functionName: "setText",
+      args: [agentName, key, value],
     });
   }
-
+  txs.push(...await writePermissions(body, account, agent.agentKey ?? undefined));
   for (const { key, value } of textUpdates) {
     const hash = await ownerWallet.writeContract({
       chain: sepolia,
@@ -1104,45 +1208,12 @@ async function updatePermissionForAgent(
       args: [agentName, key, value],
       gas: 1_000_000n,
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await ensPublicClient.waitForTransactionReceipt({ hash, timeout: 0 });
+    if (receipt.status !== "success") throw new Error(`ENS update reverted for ${key}: ${hash}`);
     txs.push({ label: `ENS text ${key}=${value} for ${agentName}`, hash });
   }
 
-  // 2. Sync to axon PermissionRegistry on devnet so validation passes.
-  if (budgetProvided || body.active === true) {
-    const epochLength = 86_400n;
-    const hash = await wallet.writeContract({
-      address: REGISTRY,
-      abi: REGISTRY_ABI,
-      functionName: "grantAgent",
-      args: [agent.account, agent.agentKey ?? zeroAddress, 1, budget, epochLength, expiresAt],
-      gas: 1_000_000n,
-    });
-    await publicClient.waitForTransactionReceipt({ hash });
-    txs.push({ label: `grantAgent ${agent.account} (${agentName})`, hash });
-  }
-
-  // Allowlist sync on devnet registry.
-  if (body.allowlist && Array.isArray(body.allowlist)) {
-    for (const entry of body.allowlist as Array<{ target: string; selector: string }>) {
-      if (!entry.target || !entry.selector || !isAddress(entry.target)) continue;
-      const hash = await wallet.writeContract({
-        address: REGISTRY,
-        abi: REGISTRY_ABI,
-        functionName: "allow",
-        args: [agent.account, entry.target as Address, entry.selector as Hex],
-        gas: 1_000_000n,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-      txs.push({ label: `allow ${entry.selector} -> ${entry.target}`, hash });
-    }
-  }
-
-  // Track the subdomain.
-  const existing = agentSubdomains.get(HUMAN_ENS_NAME ?? agentName) ?? [];
-  if (!existing.includes(agentName)) {
-    agentSubdomains.set(HUMAN_ENS_NAME ?? agentName, [...existing, agentName]);
-  }
+  agentStore.save(normalize(HUMAN_ENS_NAME), agentName, resolved ? undefined : txs.at(-1)?.hash);
 
   return { ok: true, txs, state: await readState() };
 }
@@ -1224,6 +1295,11 @@ const server = createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "GET" && url.pathname === "/api/ready") {
+      json(res, 200, { ok: true, service: "axon-api" });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/health") {
       const [chainId, blockNumber] = await Promise.all([
         publicClient.getChainId(),
@@ -1278,30 +1354,31 @@ const server = createServer(async (req, res) => {
         fnId === "payAmount" ? parseAmount(body.amountEth) : null;
 
       let agentContext: { name: string; account: Address; permissions: unknown } | null = null;
-      if (agentName) {
+      if (lane === "agent" && agentName) {
         const resolved = await resolveAgentFromEns(agentName);
-        if (resolved && resolved.account) {
-          agentContext = {
-            name: resolved.name,
-            account: resolved.account,
-            permissions: {
-              active: resolved.active,
-              budget: resolved.budget.toString(),
-              version: resolved.version.toString(),
-              allowlist: resolved.allowlist,
-            },
-          };
-        }
+        if (!resolved?.account || !isAddress(resolved.account, { strict: false }))
+          throw new Error(`Agent ${agentName} has no valid devnet account in its Sepolia records.`);
+        agentContext = {
+          name: resolved.name,
+          account: getAddress(resolved.account),
+          permissions: {
+            active: resolved.active,
+            budget: resolved.budget.toString(),
+            version: resolved.version.toString(),
+            allowlist: resolved.allowlist,
+          },
+        };
       }
 
       const result =
         lane === "human"
           ? await humanCall(fnId, amountWei)
-          : await agentCall(fnId, amountWei);
-      remember(result as Record<string, unknown>);
+          : await agentCall(fnId, amountWei, agentContext?.account);
+      const recorded = { ...result, agent: agentContext };
+      remember(recorded);
       json(res, 200, {
         ok: Boolean(result.ok),
-        result: { ...result, agent: agentContext },
+        result: recorded,
         state: await readState(),
       });
       return;
@@ -1309,7 +1386,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/permission") {
       const body = await readBody(req);
-      const verification = await verifyWorldIdProof(body.worldIdProof);
+      const verification = await verifyWorldIdProof(body.worldIdProof, req);
       if (!verification.valid) {
         throw new Error(`World ID verification required: ${verification.reason ?? "invalid proof"}`);
       }
@@ -1318,7 +1395,7 @@ const server = createServer(async (req, res) => {
       if (agentName) {
         result = await updatePermissionForAgent(body, agentName);
       } else {
-        result = await updatePermission(body);
+        result = { ok: true, txs: await writePermissions(body, ACCOUNT), state: await readState() };
       }
       json(res, 200, result);
       return;
@@ -1348,7 +1425,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/ens/agents") {
       const name = url.searchParams.get("name") ?? HUMAN_ENS_NAME;
       if (!name) throw new Error("name query parameter is required (or set HUMAN_ENS_NAME)");
-      const subs = agentSubdomains.get(name) ?? [];
+      const subs = agentStore.names(normalize(name));
       const resolved = await Promise.all(
         subs.map(async (sub) => {
           const agent = await resolveAgentFromEns(sub);
@@ -1387,11 +1464,13 @@ const server = createServer(async (req, res) => {
       const agentKey = privateKeyToAccount(AGENT_PK).address;
 
       if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
+      if (!await ensPublicClient.getCode({ address: ENS_REGISTRY }))
+        throw new Error("ENS_REGISTRY has no contract code on Sepolia. Configure a deployed resolver before registering agents.");
       const ownerWallet = ensOwnerWallet;
 
       // World ID gate for creating a new agent namespace.
       const proof = body.worldIdProof;
-      const verification = await verifyWorldIdProof(proof);
+      const verification = await verifyWorldIdProof(proof, req);
       if (!verification.valid) {
         throw new Error(`World ID verification required: ${verification.reason ?? "invalid proof"}`);
       }
@@ -1402,6 +1481,7 @@ const server = createServer(async (req, res) => {
       if (budget <= 0n) throw new Error("budget must be greater than 0");
 
       const textRecords = [
+        { key: "axon.dnsName", value: fullName },
         { key: "axon.account", value: agentAccount },
         { key: "axon.agentKey", value: agentKey },
         { key: "axon.active", value: "true" },
@@ -1454,13 +1534,7 @@ const server = createServer(async (req, res) => {
         activeEnsRegistrations.delete(fullName);
       }
 
-      const existing = agentSubdomains.get(parent) ?? [];
-      if (!existing.includes(fullName)) {
-        agentSubdomains.set(parent, [...existing, fullName]);
-      }
-
-      const lastWrite = txs.at(-1);
-      if (lastWrite) agentRegistrationHashes.set(fullName, lastWrite.hash);
+      agentStore.save(normalize(parent), fullName, txs.at(-1)?.hash);
 
       json(res, 200, {
         ok: true,
@@ -1470,7 +1544,7 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" || req.method === "HEAD") {
+    if (!API_ONLY && !url.pathname.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
       serveStatic(req, res, url.pathname);
       return;
     }
@@ -1486,7 +1560,6 @@ server.listen(PORT, HOST, () => {
   console.log(`  counter          ${COUNTER}`);
   console.log(`  agent account    ${ACCOUNT}`);
   console.log(`  registry         ${REGISTRY}`);
-  console.log(`  console          http://localhost:${PORT}/app`);
-  console.log(`  permissions      http://localhost:${PORT}/app/permissions`);
+  if (!API_ONLY) console.log(`  console          http://localhost:${PORT}/app`);
   console.log(`  rpc host         ${new URL(RPC).hostname}`);
 });
