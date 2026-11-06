@@ -64,19 +64,19 @@ export function encodeIntent(intent: Intent): `0x${string}` {
   return encodeAbiParameters([INTENT_TUPLE], [intent]);
 }
 
-export function encodeValidate(intent: Intent): `0x${string}` {
+export function encodeValidate(intent: Intent, intentData = encodeIntent(intent)): `0x${string}` {
   return encodeFunctionData({
     abi: ACCOUNT_ABI,
     functionName: "validate",
-    args: [encodeIntent(intent)],
+    args: [intentData],
   });
 }
 
-export function encodeExecute(intent: Intent): `0x${string}` {
+export function encodeExecute(intent: Intent, intentData = encodeIntent(intent)): `0x${string}` {
   return encodeFunctionData({
     abi: ACCOUNT_ABI,
     functionName: "execute",
-    args: [encodeIntent(intent)],
+    args: [intentData],
   });
 }
 
@@ -84,6 +84,7 @@ export interface BuildOptions {
   account: `0x${string}`;
   agentKey: `0x${string}`;
   intent: Intent;
+  intentData?: `0x${string}`;
   chainId?: bigint;
   nonceSeq: bigint;
   nonceKeys?: bigint[];
@@ -100,6 +101,7 @@ export function buildAgentFrameTx(opts: BuildOptions): FrameTx {
     account,
     agentKey,
     intent,
+    intentData,
     chainId = 1337n,
     nonceSeq,
     nonceKeys = [0n],
@@ -123,7 +125,7 @@ export function buildAgentFrameTx(opts: BuildOptions): FrameTx {
         target: null,
         limits: { execution: verifyGas, state: verifyStateGas },
         value: 0n,
-        data: hexToBytes(encodeValidate(intent)),
+        data: hexToBytes(encodeValidate(intent, intentData)),
       },
       {
         mode: Mode.SENDER,
@@ -131,7 +133,7 @@ export function buildAgentFrameTx(opts: BuildOptions): FrameTx {
         target: null,
         limits: { execution: executeGas, state: executeStateGas },
         value: 0n,
-        data: hexToBytes(encodeExecute(intent)),
+        data: hexToBytes(encodeExecute(intent, intentData)),
       },
     ],
     signatures: [
