@@ -115,6 +115,7 @@ export interface AgentAllowlistEntry {
   selector: string
 }
 export interface AgentInfo {
+  ensPublished?: boolean
   registrationTxHash?: string
   name: string
   account: string | null
@@ -124,9 +125,10 @@ export interface AgentInfo {
   version: string
   allowlist: AgentAllowlistEntry[]
   unresolved?: boolean
-  localPolicy?: { budget: string; allow: Record<FunctionId, boolean> }
 }
 export interface EnsState {
+  hierarchy?: { name: string; registrationTxHash: string }[]
+  error?: string
   humanName: string | null
   agents: AgentInfo[]
 }

@@ -25,6 +25,9 @@ import {
   decodeErrorResult,
   hexToString,
   encodeAbiParameters,
+  encodeFunctionData,
+  namehash,
+  toHex,
   formatEther,
   http,
   parseEther,
@@ -39,9 +42,9 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { getEnsText, normalize } from "viem/ens";
+import { getEnsText, normalize, packetToBytes } from "viem/ens";
 import { AxonClient } from "@axon/sdk";
-import { openAgentStore } from "./agent-store.ts";
+import { prepareEnsHierarchy, readEnsHierarchy } from "./ens-hierarchy.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(HERE, "..");
@@ -258,26 +261,15 @@ const REGISTRY_ABI = [
   },
 ] as const satisfies Abi;
 
-const ENS_TEXT_ABI = [
-  {
-    type: "function",
-    name: "text",
-    stateMutability: "view",
-    inputs: [{ name: "name", type: "string" }, { name: "key", type: "string" }],
-    outputs: [{ type: "string" }],
-  },
-  {
-    type: "function",
-    name: "setText",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "name", type: "string" },
-      { name: "key", type: "string" },
-      { name: "value", type: "string" },
-    ],
-    outputs: [],
-  },
-] as const satisfies Abi;
+const AXON_NAME_TEXT_ABI = parseAbi(["function text(string name, string key) view returns (string)"]);
+const ENS_PERMISSIONED_RESOLVER_ABI = parseAbi([
+  "function multicall(bytes[]) returns (bytes[])",
+  "function getRecordId(bytes32) view returns (uint256)",
+  "function setAddress(bytes,uint256,bytes)",
+  "function setText(bytes,string,string)",
+]);
+const ENS_EXECUTION_COIN = 0x80000000n + BigInt(CHAIN_ID);
+const ENS_IDENTITY_KEYS = ["axon.account", "axon.agentKey"] as const;
 
 const ACCOUNT_ABI = [
   {
@@ -510,43 +502,58 @@ async function readAllowlist(account = ACCOUNT) {
   return Object.fromEntries(entries) as Record<FunctionId, boolean>;
 }
 
-const agentStore = openAgentStore(resolve(HERE, "agent-registrations.json"));
-const activeEnsRegistrations = new Set<string>();
-const pendingEnsRegistrationWrites = new Map<string, { hash: Hex; value: string }>();
+const ensHierarchyClient = createPublicClient({
+  chain: sepolia,
+  // The signing RPC may have a very small eth_getLogs range limit.
+  transport: http(process.env.SEPOLIA_INDEX_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com", {
+    timeout: 12_000,
+  }),
+});
+const hierarchyCache = new Map<string, {
+  expires: number;
+  result: ReturnType<typeof readEnsHierarchy>;
+}>();
 
-async function readEnsTextRecord(name: string, key: string): Promise<string | null> {
-  if (!ensPublicClient) return null;
-  const normalizedName = normalize(name);
-  if (ENS_REGISTRY) {
-    try {
-      return await ensPublicClient.readContract({
-        address: ENS_REGISTRY,
-        abi: ENS_TEXT_ABI,
-        functionName: "text",
-        args: [normalizedName, key],
-      });
-    } catch {
-      // External resolvers can still be read through the universal resolver.
-    }
-  }
-  try {
-    return await getEnsText(ensPublicClient, {
-      name: normalizedName,
-      key,
-    });
-  } catch {
-    return null;
-  }
+function getEnsHierarchy(parent: string) {
+  const cached = hierarchyCache.get(parent);
+  if (cached && cached.expires > Date.now()) return cached.result;
+  const entry = {
+    expires: Date.now() + 30_000,
+    result: readEnsHierarchy(ensHierarchyClient, parent),
+  };
+  hierarchyCache.set(parent, entry);
+  void entry.result.catch(() => {
+    if (hierarchyCache.get(parent) === entry) hierarchyCache.delete(parent);
+  });
+  return entry.result;
+}
+
+const activeEnsRegistrations = new Set<string>();
+const pendingEnsRegistrationWrites = new Map<string, Hex>();
+
+async function readPublicEnsIdentity(name: string) {
+  if (!ensPublicClient) return [null, null];
+  const client = ensPublicClient;
+  return Promise.all(ENS_IDENTITY_KEYS.map((key) => getEnsText(client, { name, key })));
 }
 
 async function resolveAgentIdentity(name: string) {
-  const [account, agentKey] = await Promise.all([
-    readEnsTextRecord(name, "axon.account"),
-    readEnsTextRecord(name, "axon.agentKey"),
-  ]);
+  name = normalize(name);
+  const publicRecords = await readPublicEnsIdentity(name).catch(() => [null, null]);
+  const ensPublished = publicRecords.every(Boolean);
+  let [account, agentKey] = publicRecords;
+  if (!account && !agentKey && ensPublicClient && ENS_REGISTRY) {
+    const client = ensPublicClient;
+    const registry = ENS_REGISTRY;
+    [account, agentKey] = await Promise.all(ENS_IDENTITY_KEYS.map((key) =>
+      client.readContract({
+        address: registry, abi: AXON_NAME_TEXT_ABI, functionName: "text", args: [name, key],
+      }).catch(() => null),
+    ));
+  }
   if (!account || !agentKey || !isAddress(account, { strict: false }) || !isAddress(agentKey, { strict: false }))
     return null;
-  return { name: normalize(name), account: getAddress(account), agentKey: getAddress(agentKey) };
+  return { name, account: getAddress(account), agentKey: getAddress(agentKey), ensPublished };
 }
 
 async function readNamedAgent(name: string, defaultPolicy?: {
@@ -573,6 +580,19 @@ async function readNamedAgent(name: string, defaultPolicy?: {
     version: grant.version,
     allowlist: FUNCTIONS.filter(({ id }) => allowlist[id]).map(({ selector }) => ({ target: COUNTER, selector })),
   };
+}
+
+async function readEnsNamespace(parent: string, defaultPolicy?: Parameters<typeof readNamedAgent>[1]) {
+  const hierarchy = await getEnsHierarchy(parent);
+  const agents = await Promise.all(hierarchy.map(async ({ name, registrationTxHash }) => {
+    const agent = await readNamedAgent(name, defaultPolicy);
+    if (!agent?.ensPublished) return null;
+    return {
+      ...agent, registrationTxHash,
+      budget: agent.budget.toString(), version: agent.version.toString(),
+    };
+  }));
+  return { humanName: parent, hierarchy, agents: agents.filter((agent) => agent !== null) };
 }
 
 async function readState() {
@@ -631,30 +651,13 @@ async function readState() {
     agentBalanceEth: eth(balance),
     intentNonce: intentNonce.toString(),
     history,
-    ens: await (async () => {
-      if (!HUMAN_ENS_NAME) return { humanName: null, agents: [] };
-      const subs = agentStore.names(normalize(HUMAN_ENS_NAME));
-      const resolved = await Promise.all(
-        subs.map(async (sub) => {
-          const agent = await readNamedAgent(sub, { grant: grantRaw.grant, allowlist });
-          return {
-            name: sub,
-            registrationTxHash: agentStore.hash(sub),
-            ...(agent
-              ? {
-                  account: agent.account,
-                  agentKey: agent.agentKey,
-                  active: agent.active,
-                  budget: agent.budget.toString(),
-                  version: agent.version.toString(),
-                  allowlist: agent.allowlist,
-                }
-              : { unresolved: true, localPolicy: agentStore.policy(sub) }),
-          };
-        }),
-      );
-      return { humanName: HUMAN_ENS_NAME, agents: resolved };
-    })(),
+    ens: HUMAN_ENS_NAME
+      ? await readEnsNamespace(normalize(HUMAN_ENS_NAME), { grant: grantRaw.grant, allowlist })
+          .catch(() => ({
+            humanName: HUMAN_ENS_NAME, hierarchy: [], agents: [],
+            error: "Could not read the ENS hierarchy from Sepolia.",
+          }))
+      : { humanName: null, hierarchy: [], agents: [] },
   };
 }
 
@@ -1109,7 +1112,6 @@ async function updatePermissionForAgent(body: Record<string, unknown>, name: str
   const agent = await resolveAgentIdentity(agentName);
   if (!agent) throw new Error(`Agent ${agentName} has no Sepolia account binding. Register it first.`);
   const txs = await writePermissions(body, agent.account, agent.agentKey);
-  agentStore.save(normalize(HUMAN_ENS_NAME), agentName);
   return { ok: true, txs, state: await readState() };
 }
 
@@ -1320,26 +1322,8 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/ens/agents") {
       const name = url.searchParams.get("name") ?? HUMAN_ENS_NAME;
       if (!name) throw new Error("name query parameter is required (or set HUMAN_ENS_NAME)");
-      const subs = agentStore.names(normalize(name));
-      const resolved = await Promise.all(
-        subs.map(async (sub) => {
-          const agent = await readNamedAgent(sub);
-          return {
-            name: sub,
-            ...(agent
-              ? {
-                  account: agent.account,
-                  agentKey: agent.agentKey,
-                  active: agent.active,
-                  budget: agent.budget.toString(),
-                  version: agent.version.toString(),
-                  allowlist: agent.allowlist,
-                }
-              : { unresolved: true }),
-          };
-        }),
-      );
-      json(res, 200, { ok: true, parent: name, agents: resolved });
+      const namespace = await readEnsNamespace(normalize(name));
+      json(res, 200, { ok: true, parent: namespace.humanName, ...namespace });
       return;
     }
 
@@ -1355,9 +1339,6 @@ const server = createServer(async (req, res) => {
       const agentAccount = ACCOUNT;
       const agentKey = privateKeyToAccount(AGENT_PK).address;
 
-      if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
-      if (!await ensPublicClient.getCode({ address: ENS_REGISTRY }))
-        throw new Error("ENS_REGISTRY has no contract code on Sepolia. Configure a deployed resolver before registering agents.");
       const ownerWallet = ensOwnerWallet;
 
       // World ID gate for creating a new agent namespace.
@@ -1367,59 +1348,76 @@ const server = createServer(async (req, res) => {
         throw new Error(`World ID verification required: ${verification.reason ?? "invalid proof"}`);
       }
 
-      const parent = HUMAN_ENS_NAME ?? subdomain.split(".").slice(-2).join(".");
-      const fullName = normalize(`${subdomain}.${parent}`);
-      const textRecords = [
-        { key: "axon.dnsName", value: fullName },
-        { key: "axon.account", value: agentAccount },
-        { key: "axon.agentKey", value: agentKey },
-      ];
+      if (!HUMAN_ENS_NAME) throw new Error("Configure a parent ENS name before registering agents.");
+      const parent = normalize(HUMAN_ENS_NAME);
+      const relativeName = normalize(subdomain.trim());
+      const [label, ...branches] = relativeName.split(".");
+      if (!label || branches.length > 2) throw new Error("Enter one to three labels relative to the configured parent.");
+      const fullName = `${relativeName}.${parent}`;
+      if (activeEnsRegistrations.size)
+        throw new Error("Another ENS registration is already running.");
 
-      if (activeEnsRegistrations.has(fullName))
-        throw new Error(`Registration for ${fullName} is already running.`);
       activeEnsRegistrations.add(fullName);
       const txs: { label: string; hash: Hex }[] = [];
       try {
-        for (const { key, value } of textRecords) {
-          const recordId = `${fullName}:${key}`;
-          let pending = pendingEnsRegistrationWrites.get(recordId);
-          if (!pending) {
-            if (await readEnsTextRecord(fullName, key) === value) continue;
-            const { request } = await ensPublicClient.simulateContract({
-              account: ownerWallet.account!,
-              address: ENS_REGISTRY,
-              abi: ENS_TEXT_ABI,
-              functionName: "setText",
-              args: [fullName, key, value],
-            }).catch((error) => {
-              throw new Error(`ENS simulation failed for ${key}: ${message(error)}`);
-            });
-            const hash = await ownerWallet.writeContract({
-              ...request,
-              chain: sepolia,
-              gas: 1_000_000n,
-            });
-            pending = { hash, value };
-            pendingEnsRegistrationWrites.set(recordId, pending);
-          }
-          const { hash } = pending;
-          const receipt = await ensPublicClient.waitForTransactionReceipt({
-            hash,
-            timeout: 0, // Keep polling while the Sepolia transaction is pending.
-          }).catch((error) => {
-            throw new Error(`Could not confirm ENS text update for ${key} (${hash}): ${message(error)}`);
+        const client = ensPublicClient;
+        const resolver = await client.getEnsResolver({ name: parent });
+        if (!resolver) throw new Error(`${parent} needs an ENSv2 Permissioned Resolver.`);
+        const signer = ownerWallet.account!;
+        const hierarchy = await prepareEnsHierarchy(client, signer.address, parent, resolver, async (label, to, data) => {
+          await client.call({ account: signer.address, to, data });
+          const hash = await ownerWallet.sendTransaction({ account: signer, chain: sepolia, to, data });
+          const receipt = await client.waitForTransactionReceipt({ hash, timeout: 0 });
+          if (receipt.status !== "success") throw new Error(`${label} reverted: ${hash}`);
+          txs.push({ label, hash });
+          return hash;
+        }, branches.reverse());
+        const matchesPublicBinding = async () => {
+          const [records, resolved] = await Promise.all([
+            readPublicEnsIdentity(fullName),
+            client.getEnsAddress({ name: fullName, coinType: ENS_EXECUTION_COIN }),
+          ]);
+          return resolved?.toLowerCase() === agentAccount.toLowerCase() &&
+            records[0]?.toLowerCase() === agentAccount.toLowerCase() &&
+            records[1]?.toLowerCase() === agentKey.toLowerCase();
+        };
+
+        let hash = pendingEnsRegistrationWrites.get(fullName);
+        if (!hash && !await matchesPublicBinding()) {
+          if (await client.getEnsResolver({ name: fullName }) !== resolver)
+            throw new Error(`${fullName} does not use the parent’s wildcard resolver.`);
+          const recordId = await client.readContract({
+            address: resolver, abi: ENS_PERMISSIONED_RESOLVER_ABI,
+            functionName: "getRecordId", args: [namehash(fullName)],
           });
-          pendingEnsRegistrationWrites.delete(recordId);
-          if (receipt.status !== "success") throw new Error(`ENS text update failed for ${key}: ${hash}`);
-          if (pending.value !== value)
-            throw new Error(`An earlier write for ${key} has now confirmed. Retry to apply the new value.`);
-          txs.push({ label: `ENS text ${key} for ${fullName}`, hash });
+          if (recordId !== 0n) throw new Error(`${fullName} already has an ENS resolver record.`);
+
+          const dns = toHex(packetToBytes(fullName));
+          const abi = ENS_PERMISSIONED_RESOLVER_ABI;
+          const calls = [
+            encodeFunctionData({ abi, functionName: "setAddress", args: [dns, ENS_EXECUTION_COIN, agentAccount] }),
+            encodeFunctionData({ abi, functionName: "setText", args: [dns, "axon.account", agentAccount] }),
+            encodeFunctionData({ abi, functionName: "setText", args: [dns, "axon.agentKey", agentKey] }),
+          ];
+          const { request } = await client.simulateContract({
+            account: ownerWallet.account!, address: resolver, abi, functionName: "multicall", args: [calls],
+          });
+          hash = await ownerWallet.writeContract({ ...request, chain: sepolia });
+          pendingEnsRegistrationWrites.set(fullName, hash);
         }
+        if (hash) {
+          const receipt = await client.waitForTransactionReceipt({ hash, timeout: 0 });
+          pendingEnsRegistrationWrites.delete(fullName);
+          if (receipt.status !== "success") throw new Error(`ENS publication reverted: ${hash}`);
+          txs.push({ label: `Publish ENS subname ${fullName}`, hash });
+        }
+        if (!await matchesPublicBinding())
+          throw new Error(`Could not verify ${fullName} through the ENS Universal Resolver.`);
+        await hierarchy.register(label);
+        hierarchyCache.delete(parent);
       } finally {
         activeEnsRegistrations.delete(fullName);
       }
-
-      agentStore.save(normalize(parent), fullName, txs.at(-1)?.hash);
 
       json(res, 200, {
         ok: true,

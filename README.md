@@ -10,7 +10,7 @@ build for agents at all.
 
 Axon uses Sepolia for agent identity and the EIP-8141 devnet for permissions:
 
-- **Agent names:** Axon resolves each name to its account and agent key using Sepolia records.
+- **Agent names:** Axon publishes identity records on the parent’s ENSv2 Permissioned Resolver on Sepolia and registers each label in the parent’s UserRegistry so it appears under Subnames. The configured signer must own the second-level .eth parent. If the parent has no UserRegistry, Axon creates and attaches one.
 - **Execution:** The devnet `PermissionRegistry` stores the effective budget, allowlist,
   and revocation state. Permission updates write only to the devnet.
 
@@ -42,8 +42,10 @@ redeploy contracts or execute agent transactions.
 ```
 # ENSv2 on Sepolia — agent identity & control plane
 SEPOLIA_RPC=https://sepolia.infura.io/v3/YOUR_KEY
+# Optional archive RPC for reading ENS hierarchy logs. Defaults to Sepolia PublicNode.
+# SEPOLIA_INDEX_RPC=https://ethereum-sepolia-rpc.publicnode.com
 SEPOLIA_OWNER_PRIVATE_KEY=0x...          # owner key for ENS text record updates
-ENS_REGISTRY=0x...                        # Axon AgentNameRegistry deployed on Sepolia
+ENS_REGISTRY=0x...                        # optional legacy Axon name registry for older records
 HUMAN_ENS_NAME=alice.eth                  # human parent name
 
 # World ID Agent Pass — human approval gate for authority changes
@@ -65,7 +67,7 @@ WORLD_ID_VERIFIER_URL=https://developer.world.org/api/v4
 
 - `GET /api/state` — now includes `ens` (human name + resolved agents)
 - `GET /api/ens/resolve?name=trader.alice.eth` — resolve an agent subdomain
-- `GET /api/ens/agents?name=alice.eth` — list agents under a human name
+- `GET /api/ens/agents?name=alice.eth` — read the onchain ENS hierarchy and its Axon agents
 - `POST /api/ens/register` — create a new agent subdomain (World ID gated)
 - `POST /api/call` — accepts optional `agentName` to call as that ENS agent
 - `POST /api/permission` — accepts `agentName` + `worldIdProof` for ENS-scoped updates
