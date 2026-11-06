@@ -1,3 +1,4 @@
+import { AuthorityCircuit } from "@/components/brand/authority-circuit"
 import { SolidityCode } from "@/components/solidity-code"
 import { ApplicationFlow } from "@/components/brand/application-flow"
 import { AsciiSharks } from "@/components/ascii-sharks"
@@ -7,14 +8,12 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  ChevronRight,
   Code2,
   Fingerprint,
   GitBranch,
   KeyRound,
-  Layers3,
   LockKeyhole,
-  Network,
+  Layers3,
   Play,
   Radio,
   RotateCcw,
@@ -22,7 +21,6 @@ import {
   ShieldX,
   SlidersHorizontal,
   Terminal,
-  Wallet,
   Zap,
 } from "lucide-react"
 import type { KeyboardEvent, ReactNode } from "react"
@@ -63,20 +61,23 @@ function Section({
   id,
   children,
   className = "",
+  corners = false,
 }: {
   id: string
   children: ReactNode
   className?: string
+  corners?: boolean
 }) {
   return (
     <section id={id} className={`axon-section ${className}`}>
+      {corners && <CornerMarkers/>}
       <div className="container-shell">{children}</div>
     </section>
   )
 }
-function Separator() {
+function Separator({ fullWidth = false }: { fullWidth?: boolean }) {
   return (
-    <div className="axon-separator" aria-hidden="true">
+    <div className={`axon-separator${fullWidth ? " axon-separator-full" : ""}`} aria-hidden="true">
       <span />
       <span />
       <span />
@@ -109,11 +110,11 @@ function Hero() {
         Ethereum alt mempool.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
-        <ActionLink href="#playground" variant="secondary">
-          Explore the guardrails <ArrowRight size={16} />
+        <ActionLink href="/docs" variant="secondary">
+          Check out docs <ArrowRight size={16} />
         </ActionLink>
-        <SiteLink href="/docs" className="hero-docs">
-          Read the architecture <ArrowUpRight size={16} />
+        <SiteLink href="/app" className="hero-docs">
+          View demo <ArrowUpRight size={16} />
         </SiteLink>
       </div>
       <div className="axon-hero-footer">
@@ -124,13 +125,6 @@ function Hero() {
   )
 }
 
-const stages = [
-  { icon: Wallet, label: "Owner", sub: "Defines authority" },
-  { icon: KeyRound, label: "Permission grant", sub: "Scope · budget · expiry" },
-  { icon: Fingerprint, label: "Agent intent", sub: "Signs a bounded action" },
-  { icon: Network, label: "Alt mempool", sub: "Validates live state" },
-  { icon: ShieldCheck, label: "Execution", sub: "Enforces both sides" },
-]
 function Architecture() {
   return (
     <Section id="architecture">
@@ -141,39 +135,15 @@ function Architecture() {
         An agent can decide what to do. Axon defines what it is allowed to do,
         from a signed intent to onchain execution.
       </SectionHeading>
-      <ReferenceFrame className="architecture-panel">
-        <div className="architecture-top">
-          <span className="eyebrow">
-            <span className="status-dot" /> Axon / Authority flow
-          </span>
-          <span className="eyebrow">Ethereum · EIP-8141 devnet</span>
-        </div>
-        <div className="architecture-flow">
-          {stages.map((step, i) => (
-            <div className="flow-item" key={step.label}>
-              <div className={`flow-node flow-node-${i} cornered`}>
-                <CornerMarkers />
-                <step.icon size={28} />
-              </div>
-              <h3>{step.label}</h3>
-              <p>{step.sub}</p>
-              {i < 4 && <ChevronRight className="flow-arrow" size={18} />}
-            </div>
-          ))}
-        </div>
-        <div className="architecture-bottom">
-          <span>
-            <Check size={13} /> The grant is read live.
-          </span>
-          <span>
-            <Check size={13} /> Every intent is scoped.
-          </span>
-          <span>
-            <Check size={13} /> The protocol has a say.
-          </span>
-        </div>
-      </ReferenceFrame>
-      <ReferenceFrame className="edge-grid mt-8">
+      <AuthorityCircuit />
+
+    </Section>
+  )
+}
+
+function AuthorityFeatures() {
+  return <Section id="authority-features">
+      <ReferenceFrame className="edge-grid">
         {[
           {
             icon: SlidersHorizontal,
@@ -198,9 +168,9 @@ function Architecture() {
           </article>
         ))}
       </ReferenceFrame>
-    </Section>
-  )
+  </Section>
 }
+
 
 const boundaries = [
   {
@@ -247,16 +217,16 @@ function Permissions() {
   const [selected, setSelected] = useState(0)
   const item = boundaries[selected]
   return (
-    <Section id="permissions">
+    <Section id="permissions" className="cornered policy-outer-frame" corners>
       <SectionHeading
         eyebrow="Two-sided enforcement"
-        title="Permission is a shared decision."
+        title={<><ShieldCheck size={25} aria-hidden="true"/>Permission is a shared decision.</>}
       >
         Owner-defined authority meets protocol-defined rules. A single agent
         action must respect both.
       </SectionHeading>
       <div
-        className="boundary-tabs"
+        className="boundary-tabs policy-tabs"
         role="tablist"
         aria-label="Authority boundaries"
         onKeyDown={tabKeys}
@@ -456,17 +426,17 @@ function Guardrails() {
       })
   }
   return (
-    <Section id="guardrails">
+    <Section id="guardrails" className="cornered policy-outer-frame" corners>
       <SectionHeading
         eyebrow="Guardrails that are part of the transaction"
-        title="Give autonomy a scope."
+        title={<><SlidersHorizontal size={25} aria-hidden="true"/>Give autonomy a scope.</>}
       >
         Define the policy before the agent acts. Inspect how a change in
         authority changes the outcome.
       </SectionHeading>
       <div id="playground" className="playground-anchor" />
       <div
-        className="tabs guard-tabs"
+        className="tabs guard-tabs policy-tabs"
         role="tablist"
         aria-label="Guardrail types"
         onKeyDown={tabKeys}
@@ -727,6 +697,7 @@ function Developers() {
     </Section>
   )
 }
+
 function Closing() {
   return (
     <section
@@ -768,17 +739,23 @@ export function AxonHome() {
     <div className="axon-page">
       <Hero />
       <Separator />
-      <Architecture />
-      <Separator />
-      <ApplicationFlow />
-      <Separator />
-      <Permissions />
-      <Separator />
       <Comparison />
       <Separator />
-      <Guardrails />
+      <Architecture />
+      <Separator fullWidth />
+      <ApplicationFlow />
+      <Separator fullWidth />
+      <AuthorityFeatures />
       <Separator />
       <Developers />
+      <Separator />
+      <div className="axon-section policy-bento-section">
+        <div className="container-shell policy-bento-grid">
+          <Permissions />
+          <Guardrails />
+        </div>
+      </div>
+      <Separator />
       <Closing />
     </div>
   )

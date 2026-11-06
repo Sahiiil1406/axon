@@ -1,6 +1,13 @@
+import { WorkspaceFish } from "@/components/workspace-fish"
+import { ArchitectureOverview, architectureSections } from "@/components/architecture-overview"
+import { DocsQuickStart, quickStartSections } from "@/components/docs-quick-start"
+import { DocumentationTopic, documentationTopics } from "@/components/documentation-topics"
+import { SdkDocumentation, sdkPages, sdkSections } from "@/components/sdk-documentation"
 import { WorkspaceSidebar } from "@/components/workspace-sidebar"
-import { useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, Navigate, useLocation } from "react-router-dom"
 import {
+  Code2,
   ArrowRight,
   ArrowUpRight,
   Fingerprint,
@@ -11,25 +18,71 @@ import {
   ShieldX,
 } from "lucide-react"
 import { ActionLink } from "@/components/brand/primitives"
-import { ReferenceFrame } from "@/components/brand/reference-frame"
 export function Docs() {
-  const { hash } = useLocation()
-  const active = hash || "#architecture"
+  const { hash, pathname } = useLocation()
+  const [activeHeading,setActiveHeading]=useState("")
+  const requestedPage = pathname.split("/").filter(Boolean).slice(1).join("/")
+  const page = requestedPage.startsWith("architecture/") ? requestedPage.slice("architecture/".length) : requestedPage
+  const isQuickStart = page === "quick-start" || page === ""
+  const docsHref=(slug:string)=>["architecture","grants","scope","protocol","revocation","permission-layer","alt-mempool","guardrails"].includes(slug)?`/docs/architecture${slug==="architecture"?"":`/${slug}`}`:`/docs/${slug}`
+  const sdkPage = sdkPages.find(item=>`sdk/${item.slug}`===page || (page === "api-reference" && item.slug === "api-reference"))
+  const foundations = [
+    {label:"Overview",slug:"architecture",id:"architecture",icon:Layers3},
+    {label:"Permission grants",slug:"grants",id:"grants",icon:KeyRound},
+    {label:"Scope & intent",slug:"scope",id:"scope",icon:Fingerprint},
+    {label:"Protocol rules",slug:"protocol",id:"protocol",icon:ShieldCheck},
+    {label:"Revocation",slug:"revocation",id:"revocation",icon:ShieldX},
+  ]
+  const topic=documentationTopics.find(item=>item.slug===page)
+  const current=foundations.find(item=>item.slug===page)
+  const toc=isQuickStart?quickStartSections:current?.id==="architecture"?architectureSections:topic?topic.sections.map(section=>({id:section.id,label:section.title})):sdkPage?sdkPage.indices.map(index=>({id:sdkSections[index].id,label:sdkSections[index].title.replace(/^\d+\.\s*/,"")})):[{id:current?.id??"architecture",label:current?.label??"Architecture"}]
+  const sidebarItems=[
+    {label:"Quick start",href:"/docs/quick-start",icon:Layers3,active:isQuickStart,group:"Get started",subgroup:"Introduction"},
+    {label:"Installation & first payment",href:"/docs/sdk/getting-started",icon:Code2,active:page==="sdk/getting-started",group:"Get started",subgroup:"SDK setup"},
+    ...foundations.map(item=>({label:item.label,href:docsHref(item.slug),icon:item.icon,active:page===item.slug,group:"Architecture",subgroup:["grants","scope","revocation"].includes(item.slug)?"Owner authority":item.slug==="protocol"?"Execution":"Overview"})),
+    ...documentationTopics.map(item=>({label:item.title,href:docsHref(item.slug),icon:item.slug==="alt-mempool"?Network:Layers3,active:page===item.slug,group:["developers","playground"].includes(item.slug)?"Guides & examples":"Architecture",subgroup:item.slug==="permission-layer"?"Owner authority":item.slug==="guardrails"?"Enforcement":item.slug==="alt-mempool"?"Execution":"Application guides"})),
+    ...sdkPages.filter(item=>!["getting-started","api-reference"].includes(item.slug)).map(item=>({label:item.title,href:`/docs/sdk/${item.slug}`,icon:Code2,active:sdkPage?.slug===item.slug,group:"SDK guides",subgroup:["authority-and-intents","manifests"].includes(item.slug)?"Build actions":["transaction-lifecycle","frame-builder"].includes(item.slug)?"Transactions":"Integration"})),
+    {label:"SDK API",href:"/docs/api-reference",icon:Code2,active:sdkPage?.slug==="api-reference",group:"API reference",subgroup:"TypeScript SDK"},
+  ].sort((a,b)=>{
+    const groups=["Get started","Architecture","SDK guides","Guides & examples","API reference"]
+    const groupOrder=groups.indexOf(a.group)-groups.indexOf(b.group)
+    if(groupOrder)return groupOrder
+    const subgroups=["Introduction","SDK setup","Overview","Owner authority","Enforcement","Execution","Build actions","Transactions","Integration","Application guides","TypeScript SDK"]
+    return subgroups.indexOf(a.subgroup)-subgroups.indexOf(b.subgroup)
+  })
+  const allPages=sidebarItems.map(item=>({href:item.href,label:item.label}))
+  const pageIndex=allPages.findIndex(item=>item.href===pathname.replace(/\/$/,""))
+  useEffect(()=>{
+    const update=()=>{
+      const headings=Array.from(document.querySelectorAll<HTMLElement>(".docs-article section[id]"))
+      const passed=headings.filter(element=>element.getBoundingClientRect().top<180)
+      setActiveHeading((passed.at(-1)??headings[0])?.id??"")
+    }
+    update()
+    window.addEventListener("scroll",update,{passive:true})
+    return()=>window.removeEventListener("scroll",update)
+  },[pathname])
+  // Preserve links shared before the documentation was split into pages.
+  if(pathname==="/docs"&&hash){
+    const old=hash.slice(1)
+    if(old==="sdk")return <Navigate replace to="/docs/sdk/getting-started"/>
+    const oldSdk=sdkPages.find(item=>item.indices.some(index=>sdkSections[index].id===old))
+    if(oldSdk)return <Navigate replace to={`/docs/sdk/${oldSdk.slug}${hash}`}/>
+    if(old==="architecture")return <Navigate replace to="/docs/architecture"/>
+    if(foundations.some(item=>item.slug===old))return <Navigate replace to={docsHref(old)}/>
+  }
+  if(page === "")return <Navigate replace to="/docs/quick-start"/>
+  if(page === "sdk/api-reference")return <Navigate replace to="/docs/api-reference"/>
+  if(!requestedPage.startsWith("architecture/") && ["grants","scope","protocol","revocation","permission-layer","alt-mempool","guardrails"].includes(page))return <Navigate replace to={`${docsHref(page)}${hash}`}/>
+  if(page === "sdk")return <Navigate replace to="/docs/sdk/getting-started"/>
+  if(!isQuickStart&&!current&&!sdkPage&&!topic)return <Navigate replace to="/docs"/>
   return (
     <div className="docs-workspace axon-docs">
+        <WorkspaceFish page={pathname}/>
+
       <WorkspaceSidebar
         label="Documentation"
-        items={[
-          { label: "Architecture", href: "/docs#architecture", icon: Layers3 },
-          { label: "Permission grants", href: "/docs#grants", icon: KeyRound },
-          { label: "Scope & intent", href: "/docs#scope", icon: Fingerprint },
-          {
-            label: "Protocol rules",
-            href: "/docs#protocol",
-            icon: ShieldCheck,
-          },
-          { label: "Revocation", href: "/docs#revocation", icon: ShieldX },
-        ].map((item) => ({ ...item, active: item.href.endsWith(active) }))}
+        items={sidebarItems}
         resources={[
           { label: "Live console", href: "/app", icon: ArrowUpRight },
           {
@@ -39,40 +92,11 @@ export function Docs() {
           },
         ]}
       />
-      <article>
-        <section id="architecture" className="ds-section pt-0">
-          <span className="eyebrow">EIP-8141 devnet prototype</span>
-          <h1 className="display mt-5">Authority before execution.</h1>
-          <p className="body-copy mt-7">
-            Axon explores an agent-native permission layer for Ethereum. An
-            owner delegates bounded authority to an agent key; the account
-            checks the current grant and the protocol applies its own rules.
-          </p>
-          <ReferenceFrame className="mt-8 p-7">
-            <div className="docs-flow">
-              <span>
-                <KeyRound /> Owner grant
-              </span>
-              <ArrowRight />
-              <span>
-                <Network /> Alt mempool
-              </span>
-              <ArrowRight />
-              <span>
-                <ShieldCheck /> Execution
-              </span>
-            </div>
-          </ReferenceFrame>
-          <p className="body-copy mt-6">
-            The live-read AgentAccount consults a separate PermissionRegistry
-            during validation. On this devnet, that foreign storage read makes
-            its transaction inadmissible to the EIP-8141 public mempool. The
-            alt-mempool path is what allows the account to validate against
-            current external authority.
-          </p>
-        </section>
-        <section id="grants" className="ds-section">
-          <h2>01 / Permission grants</h2>
+      <article className="docs-article">
+        {isQuickStart && <DocsQuickStart/>}
+        {current?.id === "architecture" && <ArchitectureOverview/>}
+        {current?.id === "grants" && <section id="grants" className="ds-section">
+          <h1 className="display mb-7">Permission grants</h1>
           <p className="body-copy">
             The owner configures the agent key, key scheme, budget per epoch,
             epoch length, and expiry. Account registration binds the account to
@@ -90,9 +114,9 @@ export function Docs() {
             budget. Time-dependent checks run during execution so the validation
             prefix remains time-free.
           </p>
-        </section>
-        <section id="scope" className="ds-section">
-          <h2>02 / Scope & intent</h2>
+        </section>}
+        {current?.id === "scope" && <section id="scope" className="ds-section">
+          <h1 className="display mb-7">Scope & intent</h1>
           <p className="body-copy">
             An allowlist pairs a target address with a function selector. Each
             intent is tied to the current grant hash and carries a nonce and
@@ -110,9 +134,9 @@ export function Docs() {
             that agent may request. An expired, stale, unauthorized, or replayed
             intent fails the corresponding checks.
           </p>
-        </section>
-        <section id="protocol" className="ds-section">
-          <h2>03 / Protocol rules</h2>
+        </section>}
+        {current?.id === "protocol" && <section id="protocol" className="ds-section">
+          <h1 className="display mb-7">Protocol rules</h1>
           <p className="body-copy">
             An owner grant does not override the destination protocol.
             AgentNative defines an action-validation interface, and AgentVault
@@ -127,9 +151,9 @@ export function Docs() {
             owner-policy decisions; it does not submit a transaction or replace
             full account and protocol validation.
           </p>
-        </section>
-        <section id="revocation" className="ds-section">
-          <h2>04 / Live revocation</h2>
+        </section>}
+        {current?.id === "revocation" && <section id="revocation" className="ds-section">
+          <h1 className="display mb-7">Live revocation</h1>
           <p className="body-copy">
             Revoking a live grant sets it inactive and changes its hash. Pending
             intents tied to the previous grant fail freshness checks against
@@ -147,8 +171,19 @@ export function Docs() {
               Explore the guardrails <ArrowRight size={16} />
             </ActionLink>
           </div>
-        </section>
+        </section>}
+        {topic && <DocumentationTopic slug={topic.slug}/>}
+        {sdkPage && <SdkDocumentation slug={sdkPage.slug}/>}
+        <nav className="docs-page-navigation" aria-label="Documentation pages">
+          {pageIndex>0?<Link to={allPages[pageIndex-1].href}><small>Previous</small>{allPages[pageIndex-1].label}</Link>:<span/>}
+          {pageIndex<allPages.length-1&&<Link to={allPages[pageIndex+1].href}><small>Next</small>{allPages[pageIndex+1].label}<ArrowRight size={15}/></Link>}
+        </nav>
       </article>
+      <aside className="docs-minimap" aria-label="On this page">
+        <p>On this page</p>
+        <nav>{toc.map(item=><a key={item.id} href={`#${item.id}`} className={activeHeading===item.id?"is-active":""} aria-current={activeHeading===item.id?"location":undefined}><i/><span>{item.label}</span></a>)}</nav>
+        <span className="docs-minimap-caption">{isQuickStart?"Quick start":sdkPage?.slug==="api-reference"?"API reference":sdkPage?"SDK integration":topic?.group??"Architecture"}</span>
+      </aside>
     </div>
   )
 }
