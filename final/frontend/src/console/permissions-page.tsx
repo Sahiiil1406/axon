@@ -15,17 +15,20 @@ import {
   RefreshButton,
   Stat,
 } from "./components"
-import { duration, expiry, short } from "./format"
+import { demoNames } from "./demo-agents"
+import { duration, eth, expiry, short } from "./format"
 import type { FunctionId } from "./types"
 
 function RevokeDialog({
   open,
   onClose,
   onConfirm,
+  targetLabel,
 }: {
   open: boolean
   onClose: () => void
   onConfirm: () => void
+  targetLabel: string
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -45,11 +48,11 @@ function RevokeDialog({
       <div className="console-dialog-icon">
         <ShieldOff size={25} />
       </div>
-      <p className="console-eyebrow">LIVE Permission registry</p>
-      <h2 id="revoke-title">Revoke the agent grant?</h2>
+      <p className="console-eyebrow">Live permission registry</p>
+      <h2 id="revoke-title">Revoke {targetLabel}?</h2>
       <p>
-        The server will submit an owner transaction to deactivate this grant.
-        Agent calls will be rejected until you save a new grant.
+        Deactivating this grant sets its authority to inactive. Agent calls will
+        be rejected until you save a new grant.
       </p>
       <div>
         <Button variant="outline" onClick={onClose}>
@@ -62,6 +65,7 @@ function RevokeDialog({
     </dialog>
   )
 }
+
 export function PermissionsPage() {
   const {
     state,
@@ -70,7 +74,9 @@ export function PermissionsPage() {
     busy,
     refresh,
     permission,
+    ens,
     ownerTransactions,
+    worldIdStatus,
   } = useConsole()
   const [budget, setBudget] = useState("")
   const [allow, setAllow] = useState<Record<FunctionId, boolean>>({
@@ -81,42 +87,185 @@ export function PermissionsPage() {
   const [dirty, setDirty] = useState(false)
   const [invalid, setInvalid] = useState<string | null>(null)
   const [revokeOpen, setRevokeOpen] = useState(false)
+  const [revokeTarget, setRevokeTarget] = useState("")
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null) // null = default account
+
   useEffect(() => {
-    if (state && !dirty) {
-      setBudget(state.grant.budgetEth)
-      setAllow({ ...state.allowlist })
-      setInvalid(null)
+    let current = true
+    queueMicrotask(() => {
+      if (current && state && !dirty && !selectedAgent) {
+        setBudget(state.grant.budgetEth)
+        setAllow({ ...state.allowlist })
+        setInvalid(null)
+      }
+    })
+    return () => {
+      current = false
     }
-  }, [state, dirty])
+  }, [state, dirty, selectedAgent])
+
+  const selectedAgentInfo = selectedAgent
+    ? (ens.agents.find((a) => a.name === selectedAgent) ?? null)
+    : null
+
+  const demoSelected =
+    !!selectedAgent && demoNames.includes(selectedAgent) && !selectedAgentInfo
   const disabled = !state || loading || !!error || !!busy
+  const agentDisabled = disabled || !!selectedAgentInfo?.unresolved
+
   async function save(e: React.FormEvent) {
     e.preventDefault()
+    if (demoSelected) return
     const message = validateBudget(budget)
     setInvalid(message)
     if (message) return
-    if (await permission({ budgetEth: budget.trim(), allow })) setDirty(false)
+
+    if (
+      await permission({
+        budgetEth: budget.trim(),
+        allow,
+        agentName: selectedAgent ?? undefined,
+      })
+    ) {
+      setDirty(false)
+    }
   }
+
   async function reload() {
     setDirty(false)
     await refresh()
   }
-  const grant = state?.grant
+
+  const grant = selectedAgentInfo
+    ? {
+        active: selectedAgentInfo.active,
+        budgetEth: eth(selectedAgentInfo.budget),
+        spentEth: "—",
+        remainingEth: "—",
+        agentKey: selectedAgentInfo.agentKey ?? "—",
+        owner: state?.contracts.owner,
+        version: selectedAgentInfo.version,
+        grantHash: "—",
+        expiresAt: "—",
+        keyScheme: 1,
+        epochLengthSec: 86400,
+      }
+    : state?.grant
+
+  const grantRows: [string, React.ReactNode][] = [
+    ["Agent account", <ChainLink value={state?.contracts.agentAccount} />],
+    ["Agent key", <ChainLink value={grant?.agentKey} />],
+    ["Owner", <ChainLink value={grant?.owner} />],
+    ["Registry", <ChainLink value={state?.contracts.registry} />],
+    ...(selectedAgent && selectedAgentInfo
+      ? [
+          ["ENS name", <span>{selectedAgentInfo.name}</span>] as [
+            string,
+            React.ReactNode,
+          ],
+        ]
+      : []),
+    ...(selectedAgent && selectedAgentInfo
+      ? []
+      : ([
+          [
+            "Grant hash",
+            grant ? (
+              <span className="console-copy-value">
+                <code title={grant.grantHash}>
+                  {short(grant.grantHash, 10, 8)}
+                </code>
+                <CopyButton value={grant.grantHash} label="Copy grant hash" />
+              </span>
+            ) : (
+              "—"
+            ),
+          ],
+          ["Version", grant?.version ?? "—"],
+          ["Expires", expiry(grant?.expiresAt)],
+          [
+            "Key scheme",
+            grant?.keyScheme === 1
+              ? "1 · SECP256K1"
+              : grant?.keyScheme === 2
+                ? "2 · P256"
+                : (grant?.keyScheme ?? "—"),
+          ],
+        ] as [string, React.ReactNode][])),
+  ]
+
   return (
     <>
       <PageHeading
-        eyebrow="PermissionRegistry / Owner controls"
-        title="Define the agent’s authority."
+        eyebrow="PermissionRegistry / owner controls"
+        title="Define the agent's authority."
         actions={
           <RefreshButton label="Reload grant" onClick={() => void reload()} />
         }
       >
         Set the spending budget and callable selectors. Changes are submitted by
-        the demo server’s owner key and read live by the agent account.
+        the demo server's owner key and read live by the agent account. For ENS
+        agents, permissions live on the subdomain's Permissioned Resolver
+        (Sepolia) and are synced to the devnet PermissionRegistry.
       </PageHeading>
+
+      {/* Agent selector */}
+      <Panel eyebrow="00 / Select agent" title="Choose authority target">
+        <div className="console-agent-selector">
+          <label htmlFor="agent-selector">Authority target</label>
+          <select
+            id="agent-selector"
+            value={selectedAgent ?? "default"}
+            onChange={(e) => {
+              setSelectedAgent(
+                e.target.value === "default" ? null : e.target.value
+              )
+              setDirty(false)
+            }}
+            disabled={disabled}
+          >
+            <option value="default">
+              Default account (devnet PermissionRegistry)
+            </option>
+            {demoNames
+              .filter(
+                (name) => !ens.agents.some((agent) => agent.name === name)
+              )
+              .map((name) => (
+                <option key={name} value={name}>
+                  {name} (demo)
+                </option>
+              ))}
+            {ens.agents.map((a) => (
+              <option key={a.name} value={a.name}>
+                {a.name} ({a.active ? "active" : "revoked"})
+              </option>
+            ))}
+          </select>
+          {selectedAgent && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedAgent(null)}
+            >
+              Use default
+            </Button>
+          )}
+          {ens.agents.length === 0 && !state?.ens?.humanName && (
+            <p className="console-help">
+              No ENS human name configured. Create agents on the{" "}
+              <ConsoleLink href="/app/agents">Agents page</ConsoleLink>.
+            </p>
+          )}
+        </div>
+      </Panel>
+
       <div className="console-permission-grid">
         <Panel
           eyebrow="01 / Current grant"
-          title="Onchain authority"
+          title={
+            selectedAgent ? `ENS agent: ${selectedAgent}` : "Onchain authority"
+          }
           action={
             <Badge tone={grant ? (grant.active ? "good" : "bad") : "muted"}>
               {grant
@@ -149,51 +298,18 @@ export function PermissionsPage() {
             />
           </dl>
           <div className="console-grant-details">
-            <DefinitionList
-              rows={[
-                [
-                  "Agent account",
-                  <ChainLink value={state?.contracts.agentAccount} />,
-                ],
-                ["Agent key", <ChainLink value={grant?.agentKey} />],
-                ["Owner", <ChainLink value={grant?.owner} />],
-                ["Registry", <ChainLink value={state?.contracts.registry} />],
-                [
-                  "Grant hash",
-                  grant ? (
-                    <span className="console-copy-value">
-                      <code title={grant.grantHash}>
-                        {short(grant.grantHash, 10, 8)}
-                      </code>
-                      <CopyButton
-                        value={grant.grantHash}
-                        label="Copy grant hash"
-                      />
-                    </span>
-                  ) : (
-                    "—"
-                  ),
-                ],
-                ["Version", grant?.version ?? "—"],
-                ["Expires", expiry(grant?.expiresAt)],
-                [
-                  "Key scheme",
-                  grant?.keyScheme === 1
-                    ? "1 · SECP256K1"
-                    : grant?.keyScheme === 2
-                      ? "2 · P256"
-                      : (grant?.keyScheme ?? "—"),
-                ],
-              ]}
-            />
+            <DefinitionList rows={grantRows} />
           </div>
         </Panel>
+
         <Panel
           eyebrow="02 / Edit authority"
           title={
             grant && !grant.active
               ? "Regrant agent access"
-              : "Update permission"
+              : selectedAgent
+                ? `Update ${selectedAgent} permissions`
+                : "Update permission"
           }
           action={
             <Badge tone={dirty ? "warn" : "muted"}>
@@ -207,7 +323,7 @@ export function PermissionsPage() {
               <input
                 id="permission-budget"
                 value={budget}
-                disabled={disabled}
+                disabled={agentDisabled}
                 inputMode="decimal"
                 placeholder="0.05"
                 maxLength={80}
@@ -226,7 +342,7 @@ export function PermissionsPage() {
                 <button
                   key={value}
                   type="button"
-                  disabled={disabled}
+                  disabled={agentDisabled}
                   onClick={() => {
                     setBudget(value)
                     setDirty(true)
@@ -246,7 +362,7 @@ export function PermissionsPage() {
                 {invalid}
               </p>
             )}
-            <fieldset className="console-selectors" disabled={disabled}>
+            <fieldset className="console-selectors" disabled={agentDisabled}>
               <legend>Allowlisted selectors</legend>
               {state?.functions.map((fn) => (
                 <label key={fn.id}>
@@ -270,6 +386,16 @@ export function PermissionsPage() {
                   />
                 </label>
               ))}
+              {selectedAgent &&
+                selectedAgentInfo &&
+                selectedAgentInfo.allowlist.length > 0 && (
+                  <p className="console-help">
+                    ENS allowlist:{" "}
+                    {selectedAgentInfo.allowlist
+                      .map((e) => `${e.selector} → ${e.target}`)
+                      .join(", ")}
+                  </p>
+                )}
               {!state && (
                 <p className="console-help">
                   Connect to the API to load the current allowlist.
@@ -277,18 +403,33 @@ export function PermissionsPage() {
               )}
             </fieldset>
             <p className="console-help">
-              {grant && !grant.active
-                ? "The grant is revoked. Saving re-grants the existing agent key with the budget and selectors above."
-                : "Saving submits grantAgent from the owner key, then updates any changed selector permissions."}
+              {demoSelected
+                ? "Demo selection. Permission changes are disabled for this name."
+                : selectedAgent
+                  ? `Saving updates ENS text records for ${selectedAgent} (Sepolia) and syncs the devnet grant. World ID verification is required.`
+                  : grant && !grant.active
+                    ? "The grant is revoked. Saving re-grants the existing agent key with the budget and selectors above."
+                    : "Saving submits grantAgent from the owner key, then updates any changed selector permissions."}
             </p>
+            {!demoSelected && (
+              <p className="console-help">
+                Verify with World ID, then submit the permission change.
+              </p>
+            )}
             <div className="console-permission-actions">
               <Button
                 type="submit"
-                disabled={disabled}
+                disabled={
+                  agentDisabled || demoSelected || worldIdStatus === "verifying"
+                }
                 aria-busy={busy === "updating permissions"}
               >
                 <Check size={14} />
-                {grant && !grant.active ? "Save & regrant" : "Save permission"}
+                {!demoSelected && worldIdStatus !== "verified"
+                  ? "Verify with World ID"
+                  : grant && !grant.active
+                    ? "Save & regrant"
+                    : "Save permission"}
               </Button>
               <Button
                 type="button"
@@ -304,8 +445,11 @@ export function PermissionsPage() {
               <Button
                 type="button"
                 variant="destructive"
-                disabled={disabled || !grant?.active}
-                onClick={() => setRevokeOpen(true)}
+                disabled={disabled || demoSelected || !grant?.active}
+                onClick={() => {
+                  setRevokeTarget(selectedAgent ?? "default account")
+                  setRevokeOpen(true)
+                }}
               >
                 <ShieldOff size={14} /> Revoke grant
               </Button>
@@ -313,6 +457,7 @@ export function PermissionsPage() {
           </form>
         </Panel>
       </div>
+
       <Panel
         eyebrow="03 / Demo workflow"
         title="Put the permission boundary to work"
@@ -353,8 +498,23 @@ export function PermissionsPage() {
               <KeyRound size={13} /> Owner-defined, live authority
             </span>
           </article>
+          {ens.humanName && (
+            <article>
+              <span>04</span>
+              <h3>Manage ENS agents</h3>
+              <p>
+                Create agent subdomains under {ens.humanName}, each with its own
+                Permissioned Resolver. World ID verification gates authority
+                changes.
+              </p>
+              <ConsoleLink className="console-text-link" href="/app/agents">
+                Open agent manager <ArrowRight size={13} />
+              </ConsoleLink>
+            </article>
+          )}
         </div>
       </Panel>
+
       <div className="console-permission-results">
         <Panel
           eyebrow="04 / Owner transactions"
@@ -414,13 +574,18 @@ export function PermissionsPage() {
           </div>
         </Panel>
       </div>
+
       <RevokeDialog
         open={revokeOpen}
         onClose={() => setRevokeOpen(false)}
         onConfirm={() => {
           setRevokeOpen(false)
-          void permission({ active: false })
+          void permission({
+            active: false,
+            agentName: selectedAgent ?? undefined,
+          })
         }}
+        targetLabel={revokeTarget || "the agent grant"}
       />
     </>
   )

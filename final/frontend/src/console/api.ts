@@ -1,6 +1,9 @@
+import type { IDKitResultSession, RpContext } from "@worldcoin/idkit"
 import type {
+  AgentAllowlistEntry,
   CallPayload,
   ConsoleState,
+  EnsState,
   FunctionId,
   Lane,
   PermissionInput,
@@ -8,18 +11,22 @@ import type {
 } from "./types"
 
 const base = (import.meta.env?.VITE_AXON_API_URL ?? "").replace(/\/$/, "")
+const registrationBase =
+  base || (import.meta.env?.DEV ? "http://127.0.0.1:8900" : "")
 
 export async function request<T>(
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  apiBase = base,
+  timeoutMs = init.method === "POST" ? 180_000 : 20_000
 ): Promise<T> {
   const controller = new AbortController()
-  const timeout = window.setTimeout(
-    () => controller.abort(),
-    init.method === "POST" ? 180_000 : 20_000
-  )
+  const timeout =
+    timeoutMs > 0
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : undefined
   try {
-    const response = await fetch(`${base}${path}`, {
+    const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         ...(init.body ? { "content-type": "application/json" } : {}),
@@ -50,15 +57,17 @@ export async function request<T>(
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw new Error(
-        "The API request timed out. Refresh state before retrying the action."
+        "The API request timed out. Refresh state before retrying the action.",
+        { cause: error }
       )
     if (error instanceof TypeError)
       throw new Error(
-        "Cannot reach the demo API. Check the server connection, then refresh state."
+        "Cannot reach the demo API. Check the server connection, then refresh state.",
+        { cause: error }
       )
     throw error
   } finally {
-    window.clearTimeout(timeout)
+    if (timeout !== undefined) window.clearTimeout(timeout)
   }
 }
 export const fetchConsoleState = async () => {
@@ -77,17 +86,62 @@ export const fetchConsoleState = async () => {
 export const submitCall = (
   lane: Lane,
   fn: FunctionId,
-  amountEth: string | null
+  amountEth: string | null,
+  agentName?: string
 ) =>
   request<CallPayload>("/api/call", {
     method: "POST",
-    body: JSON.stringify({ lane, function: fn, amountEth }),
+    body: JSON.stringify({ lane, function: fn, amountEth, agentName }),
   })
 export const updatePermission = (input: PermissionInput) =>
   request<PermissionPayload>("/api/permission", {
     method: "POST",
     body: JSON.stringify(input),
   })
+
+export const fetchEnsState = async (): Promise<EnsState> => {
+  const state = await request<ConsoleState>("/api/state")
+  return state.ens ?? { humanName: null, agents: [] }
+}
+export const resolveEnsAgent = async (name: string) => {
+  return request<{
+    ok: boolean
+    name: string
+    account: string
+    agentKey: string
+    active: boolean
+    budget: string
+    version: string
+    allowlist: AgentAllowlistEntry[]
+  }>(`/api/ens/resolve?name=${encodeURIComponent(name)}`)
+}
+export const requestWorldIdContext = () =>
+  request<RpContext>(
+    "/api/world-id/request",
+    { method: "POST" },
+    registrationBase
+  )
+
+export const registerEnsAgent = (input: {
+  subdomain: string
+  agentKey: string
+  agentAccount: string
+  budgetEth: string
+  worldIdProof?: IDKitResultSession
+}) =>
+  request<{
+    ok: true
+    agent: string
+    txs: Array<{ label: string; hash: string }>
+  }>(
+    "/api/ens/register",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    registrationBase,
+    0
+  )
 
 /** Exact decimal validation: never convert an ETH amount to a floating point number. */
 export function validateAmount(value: string): string | null {

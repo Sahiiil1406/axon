@@ -11,12 +11,13 @@
     "build": "npm run typecheck"
   },
   "dependencies": {
-    "viem": "^2.57.14",
-    "@axon/sdk": "file:../../sdk"
+    "@axon/sdk": "file:../../sdk",
+    "@worldcoin/idkit-core": "^4.6.0",
+    "viem": "^2.57.14"
   },
   "devDependencies": {
-    "tsx": "^4.23.15",
     "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2"
   }
 }

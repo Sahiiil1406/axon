@@ -79,6 +79,11 @@ const ActivityPage = lazy(() =>
     default: module.ActivityPage,
   }))
 )
+const AgentsPage = lazy(() =>
+  import("@/console/agents-page").then((module) => ({
+    default: module.AgentsPage,
+  }))
+)
 
 export function App() {
   return (
@@ -102,6 +107,7 @@ export function App() {
             <Route index element={<DemoPage />} />
             <Route path="permissions" element={<PermissionsPage />} />
             <Route path="activity" element={<ActivityPage />} />
+            <Route path="agents" element={<AgentsPage />} />
             <Route path="transactions/:id" element={<TransactionRoute />} />
             <Route
               path="*"

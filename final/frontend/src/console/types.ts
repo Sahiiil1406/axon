@@ -1,5 +1,14 @@
+import type { IDKitResultSession } from "@worldcoin/idkit"
+
 export type Lane = "human" | "agent"
 export type FunctionId = "increment" | "pay" | "payAmount"
+export type WorldIdStatus = "not-verified" | "verifying" | "verified" | "failed"
+
+export interface CallRestrictions {
+  agentEnabled: boolean
+  allowedFunctions: Record<FunctionId, boolean>
+  maxSpendPerCall: bigint | null
+}
 export type Tone = "good" | "bad" | "warn" | "muted"
 export interface ContractFunction {
   id: FunctionId
@@ -98,8 +107,28 @@ export interface CallResult {
   error?: string | null
   at?: string
 }
+export interface AgentAllowlistEntry {
+  target: string
+  selector: string
+}
+export interface AgentInfo {
+  registrationTxHash?: string
+  name: string
+  account: string | null
+  agentKey: string | null
+  active: boolean
+  budget: string
+  version: string
+  allowlist: AgentAllowlistEntry[]
+  unresolved?: boolean
+}
+export interface EnsState {
+  humanName: string | null
+  agents: AgentInfo[]
+}
 export interface ConsoleState {
   ok: boolean
+  worldId?: { appId: string } | { error: string } | null
   checkedAt: string
   network: {
     chainId: number
@@ -123,6 +152,41 @@ export interface ConsoleState {
   agentBalanceEth: string
   intentNonce: string
   history: CallResult[]
+  ens: EnsState
+}
+export interface CallResult {
+  ok: boolean
+  lane: Lane
+  function: FunctionId
+  signature?: string
+  hash?: string
+  status?: string
+  blockNumber?: string | null
+  gasUsed?: string | null
+  caller?: string
+  value?: string
+  valueEth?: string
+  amountEth?: string | null
+  spendEth?: string
+  frames?: number
+  before?: CounterSnapshot
+  after?: CounterSnapshot
+  preflight?: Preflight
+  simulation?: Simulation
+  admission?: Admission | null
+  explorer?: string
+  error?: string | null
+  at?: string
+  agent?: {
+    name: string
+    account: string
+    permissions: {
+      active: boolean
+      budget: string
+      version: string
+      allowlist: AgentAllowlistEntry[]
+    }
+  } | null
 }
 export interface CallPayload {
   ok: boolean
@@ -140,6 +204,8 @@ export interface OwnerTransaction {
   at?: string
 }
 export interface PermissionInput {
+  agentName?: string
+  worldIdProof?: IDKitResultSession
   budgetEth?: string
   allow?: Record<FunctionId, boolean>
   active?: boolean

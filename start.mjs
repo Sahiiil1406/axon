@@ -72,10 +72,11 @@ try {
   if (!stopping) {
     const api = run('final/server', ['run', 'dev'], {
       FINAL_HOST: '127.0.0.1', FINAL_PORT: String(apiPort),
+      AXON_FRONTEND_ORIGINS: `http://localhost:${frontendPort},http://127.0.0.1:${frontendPort}`,
     });
     api.once('exit', code => { if (!stopping) stop(code || 1); });
     const frontend = run('final/frontend', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(frontendPort), '--strictPort'], {
-      AXON_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
+      VITE_AXON_API_URL: `http://127.0.0.1:${apiPort}`,
     });
     frontend.once('exit', code => { if (!stopping) stop(code || 1); });
     console.log(`\nAxon:    http://localhost:${frontendPort}\nConsole: http://localhost:${frontendPort}/app\nAPI:     http://127.0.0.1:${apiPort}\n\nPress Ctrl+C to stop both services.\n`);

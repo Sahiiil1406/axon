@@ -1,5 +1,11 @@
 import { WorkspaceSidebar } from "@/components/workspace-sidebar"
 import { Outlet, useLocation } from "react-router-dom"
+import {
+  IDKitSessionWidget,
+  CredentialRequest,
+  type IDKitResultSession,
+  type RpContext,
+} from "@worldcoin/idkit"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
@@ -9,21 +15,31 @@ import {
   LayoutDashboard,
   Radio,
   Settings2,
+  Globe,
 } from "lucide-react"
 import { WorkspaceHeader } from "@/components/workspace-header"
 import { Button } from "@/components/ui/button"
-import { fetchConsoleState, submitCall, updatePermission } from "./api"
+import {
+  fetchConsoleState,
+  fetchEnsState,
+  requestWorldIdContext,
+  submitCall,
+  updatePermission,
+} from "./api"
 import { failureReason } from "./format"
 import { ConsoleContext } from "./model"
 import { RefreshButton } from "./components"
 import type {
   CallResult,
+  CallRestrictions,
   ConsoleState,
+  EnsState,
   FunctionId,
   Lane,
   OwnerTransaction,
   PermissionInput,
   Tone,
+  WorldIdStatus,
 } from "./types"
 import "./console.css"
 
@@ -39,12 +55,25 @@ export default function ConsoleApp() {
   const [ownerTransactions, setOwnerTransactions] = useState<
     OwnerTransaction[]
   >([])
+  const [ens, setEns] = useState<EnsState>({ humanName: null, agents: [] })
+  const [ensLoading, setEnsLoading] = useState(false)
+  const [worldIdProof, setWorldIdProof] = useState<IDKitResultSession>()
+  const [worldIdContext, setWorldIdContext] = useState<RpContext>()
+  const [worldIdOpen, setWorldIdOpen] = useState(false)
+  const [worldIdStatus, setWorldIdStatus] =
+    useState<WorldIdStatus>("not-verified")
+  const [callRestrictions, setCallRestrictions] = useState<CallRestrictions>({
+    agentEnabled: true,
+    allowedFunctions: { increment: true, pay: true, payAmount: true },
+    maxSpendPerCall: null,
+  })
   const { pathname } = useLocation()
   const path = pathname.replace(/\/$/, "") || "/app"
   const requestVersion = useRef(0)
   const writing = useRef(false)
   const ingest = useCallback((next: ConsoleState) => {
     setState(next)
+    setEns(next.ens ?? { humanName: null, agents: [] })
     setLast(() => {
       const merged: Partial<Record<Lane, CallResult>> = {}
       for (const lane of ["human", "agent"] as const) {
@@ -69,6 +98,17 @@ export default function ConsoleApp() {
       if (version === requestVersion.current) setLoading(false)
     }
   }, [ingest])
+  const refreshEns = useCallback(async () => {
+    setEnsLoading(true)
+    try {
+      const next = await fetchEnsState()
+      setEns(next)
+    } catch {
+      /* ENS is optional — the demo works without it */
+    } finally {
+      setEnsLoading(false)
+    }
+  }, [])
   useEffect(() => {
     let mounted = true
     queueMicrotask(() => {
@@ -76,12 +116,17 @@ export default function ConsoleApp() {
     })
     return () => {
       mounted = false
-      // This ref is a request generation counter, not a DOM node.
+      // Request generation counter: invalidate pending responses on unmount.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestVersion.current++
     }
   }, [refresh])
-  const call = async (lane: Lane, fn: FunctionId, amount: string | null) => {
+  const call = async (
+    lane: Lane,
+    fn: FunctionId,
+    amount: string | null,
+    agentName?: string
+  ) => {
     if (writing.current || !state) return false
     writing.current = true
     setBusy(`${lane} call`)
@@ -89,7 +134,7 @@ export default function ConsoleApp() {
     requestVersion.current++
     setLoading(false)
     try {
-      const payload = await submitCall(lane, fn, amount)
+      const payload = await submitCall(lane, fn, amount, agentName || undefined)
       if (!payload.result || !payload.state)
         throw new Error(
           "The API did not return a call result and updated state."
@@ -104,7 +149,9 @@ export default function ConsoleApp() {
       setNotice({
         tone: payload.ok ? "good" : "bad",
         message: payload.ok
-          ? `${lane === "human" ? "Human" : "Agent"} call confirmed.`
+          ? `${lane === "human" ? "Human" : "Agent"} call${
+              agentName ? ` as ${agentName}` : ""
+            } confirmed.`
           : failureReason(payload.result),
       })
       return payload.ok
@@ -122,15 +169,29 @@ export default function ConsoleApp() {
       setBusy(null)
     }
   }
+  const takeWorldIdProof = () => {
+    setWorldIdProof(undefined)
+    setWorldIdStatus("not-verified")
+    return worldIdProof
+  }
+
   const permission = async (input: PermissionInput) => {
     if (writing.current || !state) return false
+    if (!worldIdProof) {
+      await verifyWorldId()
+      return false
+    }
     writing.current = true
+    const proof = takeWorldIdProof()
     setBusy(input.active === false ? "revoking grant" : "updating permissions")
     setNotice(null)
     requestVersion.current++
     setLoading(false)
     try {
-      const payload = await updatePermission(input)
+      const payload = await updatePermission({
+        ...input,
+        worldIdProof: proof,
+      })
       if (!payload.ok || !payload.state)
         throw new Error(
           "The API did not confirm the permission update. Refresh state to inspect the grant."
@@ -168,15 +229,58 @@ export default function ConsoleApp() {
       setBusy(null)
     }
   }
+  const worldId = state?.worldId
+  const verifyWorldId = async () => {
+    if (!state) return false
+    setNotice(null)
+    if (!worldId || "error" in worldId) {
+      setWorldIdStatus("failed")
+      setNotice({
+        message: worldId?.error ?? "World ID configuration is unavailable.",
+        tone: "bad",
+      })
+      return false
+    }
+    if (worldIdStatus === "verifying") return false
+    setWorldIdProof(undefined)
+    setWorldIdStatus("verifying")
+    try {
+      setWorldIdContext(await requestWorldIdContext())
+      setWorldIdOpen(true)
+    } catch (error) {
+      setWorldIdStatus("failed")
+      setNotice({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not start World ID verification.",
+        tone: "bad",
+      })
+    }
+    return false
+  }
+  const setCallRestriction = (key: keyof CallRestrictions, value: unknown) => {
+    setCallRestrictions((prev) => ({
+      ...prev,
+      [key]:
+        key === "allowedFunctions"
+          ? {
+              ...prev.allowedFunctions,
+              ...(value as Record<FunctionId, boolean>),
+            }
+          : value,
+    }))
+  }
   useEffect(() => {
     const original = document.title
-    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/activity" ? "Activity" : "Transaction details"}`
+    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/agents" ? "Agents (ENS)" : path === "/app/activity" ? "Activity" : path === "/app/agents" ? "Agents (ENS)" : "Transaction details"}`
     return () => {
       document.title = original
     }
   }, [path])
   const nav = [
     { href: "/app", label: "Overview", icon: LayoutDashboard },
+    { href: "/app/agents", label: "Agents (ENS)", icon: Globe },
     { href: "/app/permissions", label: "Permissions", icon: Settings2 },
     { href: "/app/activity", label: "Activity", icon: Activity },
   ]
@@ -190,17 +294,66 @@ export default function ConsoleApp() {
         notice,
         last,
         ownerTransactions,
+        ens,
+        ensLoading,
+        worldIdStatus,
+        takeWorldIdProof,
+        callRestrictions,
+        setCallRestriction,
         refresh,
+        refreshEns,
         call,
         permission,
+        verifyWorldId,
         path,
       }}
     >
+      {worldIdContext && worldId && "appId" in worldId && (
+        <IDKitSessionWidget
+          open={worldIdOpen}
+          onOpenChange={(open) => {
+            setWorldIdOpen(open)
+            if (!open)
+              setWorldIdStatus((status) =>
+                status === "verifying" ? "not-verified" : status
+              )
+          }}
+          rp_context={worldIdContext}
+          environment="production"
+          constraints={CredentialRequest("proof_of_human")}
+          app_id={worldId.appId as `app_${string}`}
+          onSuccess={(proof) => {
+            setWorldIdOpen(false)
+            setWorldIdProof(proof)
+            setWorldIdStatus("verified")
+          }}
+          onError={() => {
+            setWorldIdStatus("failed")
+            setNotice({
+              message:
+                "World ID could not complete verification. Check the widget error and try again.",
+              tone: "bad",
+            })
+          }}
+        />
+      )}
       <div className="console-app">
         <a href="#console-main" className="sr-only focus:not-sr-only">
           Skip to console
         </a>
-        <WorkspaceHeader page={path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/activity" ? "Activity" : "Transaction details"} />
+        <WorkspaceHeader
+          page={
+            path === "/app"
+              ? "Overview"
+              : path === "/app/permissions"
+                ? "Permissions"
+                : path === "/app/activity"
+                  ? "Activity"
+                  : path === "/app/agents"
+                    ? "Agents (ENS)"
+                    : "Transaction details"
+          }
+        />
         <div className="console-layout">
           <WorkspaceSidebar
             label="Workspace"
@@ -236,6 +389,19 @@ export default function ConsoleApp() {
                   : state
                     ? `Chain ${state.network.chainId} · Block ${state.network.blockNumber}`
                     : "Connecting…"}
+              </span>
+              {state?.ens.humanName && (
+                <span className="console-ens-pill">
+                  <Globe size={14} />
+                  {state.ens.humanName} · {state.ens.agents.length} agents
+                </span>
+              )}
+              <span className="console-worldid-row">
+                <span className={`console-worldid-dot ${worldIdStatus}`} />
+                <span className="console-worldid-label">
+                  World ID:{" "}
+                  {worldIdStatus === "verified" ? "Verified" : worldIdStatus}
+                </span>
               </span>
               <span className="console-sync">
                 {state?.checkedAt
