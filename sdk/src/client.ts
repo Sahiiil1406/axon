@@ -474,12 +474,13 @@ export class AxonClient {
     return BigInt(n);
   }
 
-  async prepare(intent: Intent): Promise<{ tx: FrameTx; raw: Hex; json: FrameTxJson }> {
+  async prepare(intent: Intent, intentData?: Hex): Promise<{ tx: FrameTx; raw: Hex; json: FrameTxJson }> {
     const tx = buildSignedAgentTx({
       account: this.config.account,
       agentKey: this.agentAddress,
       agentPrivateKey: this.config.agentPrivateKey,
       intent,
+      intentData,
       chainId: BigInt(this.config.chainId),
       nonceSeq: await this.txNonce(),
     });

@@ -163,3 +163,13 @@ export function validateBudget(value: string): string | null {
     return "The epoch budget exceeds the registry’s uint128 limit."
   return null
 }
+
+
+export const runZkProofDemo = () =>
+  request<{
+    root: string
+    amountWei: string
+    verified: boolean
+    tamperedAmountRejected: boolean
+    overLimitRejected: boolean
+  }>("/api/zk/demo", { method: "POST" })

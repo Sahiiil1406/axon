@@ -25,3 +25,8 @@ Common VERIFY codes are `E_TARGET_DENIED` for an unallowlisted selector, `E_GRAN
 ## Report the result
 
 Report the agent, requested action, outcome, and explorer link when available. For rejection, show the returned frame and exact code, such as `VERIFY frame 0 / E_TARGET_DENIED`. For an included revert, show the failed frame when available and distinguish simulation diagnosis from confirmed receipt evidence. A pre-inclusion rejection has no onchain receipt. A simulation or pending status is not confirmation.
+
+
+## Scoped private policy
+
+When the user requests a private proof, use a deployed ScopedAgentAccount and append `--scoped-view <path>` to the runner. Use the view for the requested function. If the account or matching view is missing, report what is needed. Keep the witness file private and let the runner read it. Report a local `E_PRIVATE_LIMIT` separately from an included `E_PRIVATE_PROOF` revert. See the repository's `why zk.md` for setup.
