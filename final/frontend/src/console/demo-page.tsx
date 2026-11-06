@@ -1,6 +1,8 @@
 import { useState } from "react"
 import {
   ArrowRight,
+  ShieldCheck,
+  Code2,
   Fingerprint,
   Globe,
   LockKeyhole,
@@ -227,70 +229,7 @@ export function DemoPage() {
           </p>
         </div>
       )}
-      <Panel
-        eyebrow="00 / Call restrictions"
-        title="Agent call rules"
-        action={
-          <Badge tone={callRestrictions.agentEnabled ? "good" : "bad"}>
-            {callRestrictions.agentEnabled ? "Agent enabled" : "Agent disabled"}
-          </Badge>
-        }
-      >
-        <div className="console-restrictions">
-          <label className="console-toggle-row">
-            <input
-              type="checkbox"
-              checked={callRestrictions.agentEnabled}
-              onChange={(e) =>
-                setCallRestriction("agentEnabled", e.target.checked)
-              }
-              disabled={disabled}
-            />
-            <span>Enable agent lane</span>
-          </label>
-          <div className="console-function-toggles">
-            <span className="console-toggle-label">Allowed functions:</span>
-            {state?.functions.map((f) => (
-              <label key={f.id} className="console-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={callRestrictions.allowedFunctions[f.id]}
-                  onChange={(e) =>
-                    setCallRestriction("allowedFunctions", {
-                      ...callRestrictions.allowedFunctions,
-                      [f.id]: e.target.checked,
-                    })
-                  }
-                  disabled={disabled || !callRestrictions.agentEnabled}
-                />
-                <span>{f.signature}</span>
-              </label>
-            ))}
-          </div>
-          <label className="console-toggle-row">
-            <span>Max spend per call (ETH)</span>
-            <input
-              type="text"
-              value={
-                callRestrictions.maxSpendPerCall == null
-                  ? ""
-                  : eth(callRestrictions.maxSpendPerCall.toString())
-              }
-              onChange={(e) => {
-                const v = e.target.value.trim()
-                if (!v) {
-                  setCallRestriction("maxSpendPerCall", null)
-                } else {
-                  const n = BigInt(v) * 10n ** 18n
-                  setCallRestriction("maxSpendPerCall", n)
-                }
-              }}
-              disabled={disabled || !callRestrictions.agentEnabled}
-              placeholder="no limit"
-            />
-          </label>
-        </div>
-      </Panel>
+
 
       <dl className="console-stats">
         <Stat
@@ -331,10 +270,81 @@ export function DemoPage() {
           }
         />
       </dl>
-      <div className="console-demo-grid">
+      <div className="console-call-setup-grid">
+      <Panel
+        className="console-rules-accent"
+        eyebrow="00 / Call restrictions"
+        title="Agent call rules"
+        icon={<ShieldCheck size={22}/>}
+        action={
+          <Badge tone={callRestrictions.agentEnabled ? "good" : "bad"}>
+            {callRestrictions.agentEnabled ? "Agent enabled" : "Agent disabled"}
+          </Badge>
+        }
+      >
+        <div className="console-restrictions">
+          <label className="console-toggle-row console-agent-enable">
+            <input
+              type="checkbox"
+              checked={callRestrictions.agentEnabled}
+              onChange={(e) =>
+                setCallRestriction("agentEnabled", e.target.checked)
+              }
+              disabled={disabled}
+            />
+            <span>Enable agent lane</span>
+          </label>
+          <fieldset className="console-function-toggles">
+            <legend className="console-toggle-label">Allowed functions</legend>
+            <div className="console-function-options">
+            {state?.functions.map((f) => (
+              <label key={f.id} className="console-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={callRestrictions.allowedFunctions[f.id]}
+                  onChange={(e) =>
+                    setCallRestriction("allowedFunctions", {
+                      ...callRestrictions.allowedFunctions,
+                      [f.id]: e.target.checked,
+                    })
+                  }
+                  disabled={disabled || !callRestrictions.agentEnabled}
+                />
+                <span>{f.signature}</span>
+              </label>
+            ))}
+          </div>
+          </fieldset>
+          <label className="console-spend-limit">
+            <span>Max spend per call (ETH)</span>
+            <input
+              type="text"
+              value={
+                callRestrictions.maxSpendPerCall == null
+                  ? ""
+                  : eth(callRestrictions.maxSpendPerCall.toString())
+              }
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (!v) {
+                  setCallRestriction("maxSpendPerCall", null)
+                } else {
+                  const n = BigInt(v) * 10n ** 18n
+                  setCallRestriction("maxSpendPerCall", n)
+                }
+              }}
+              disabled={disabled || !callRestrictions.agentEnabled}
+              inputMode="decimal"
+              placeholder="No per-call limit"
+            />
+          </label>
+        </div>
+      </Panel>
         <Panel
+          className="console-execute-accent"
           eyebrow="01 / Execute"
           title="Build a call"
+          icon={<Code2 size={22}/>}
           action={
             <Badge tone={busy ? "warn" : "muted"}>
               {busy
@@ -443,7 +453,6 @@ export function DemoPage() {
             </p>
             <div className="console-call-buttons">
               <Button
-                variant="outline"
                 disabled={disabled || !fn}
                 aria-busy={busy === "human call"}
                 onClick={() => void run("human")}
@@ -474,6 +483,7 @@ export function DemoPage() {
             </p>
           </form>
         </Panel>
+      </div>
         <Panel
           eyebrow="02 / Compare"
           title="What the chain saw"
@@ -509,7 +519,6 @@ export function DemoPage() {
             )}
           </div>
         </Panel>
-      </div>
       <Panel
         eyebrow="03 / Inspect"
         title="Latest receipt"

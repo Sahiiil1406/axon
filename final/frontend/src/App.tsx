@@ -38,7 +38,7 @@ function ScrollOnNavigation() {
 
 function SiteLayout() {
   const { pathname } = useLocation()
-  const docs = pathname.replace(/\/$/, "") === "/docs"
+  const docs = pathname === "/docs" || pathname.startsWith("/docs/")
   return (
     <>
       <a href="#main" className="sr-only focus:not-sr-only">
@@ -99,7 +99,7 @@ export function App() {
         <Routes>
           <Route element={<SiteLayout />}>
             <Route index element={<AxonHome />} />
-            <Route path="docs" element={<Docs />} />
+            <Route path="docs/*" element={<Docs />} />
             <Route path="design-system" element={<DesignSystem />} />
             <Route path="*" element={<AxonHome />} />
           </Route>

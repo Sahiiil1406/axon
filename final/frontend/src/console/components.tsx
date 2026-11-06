@@ -26,6 +26,7 @@ export function Badge({
 export function Panel({
   title,
   eyebrow,
+  icon,
   action,
   children,
   className = "",
@@ -33,6 +34,7 @@ export function Panel({
 }: {
   title: string
   eyebrow?: string
+  icon?: ReactNode
   action?: ReactNode
   children: ReactNode
   className?: string
@@ -44,7 +46,7 @@ export function Panel({
         <header className="console-panel-head">
           <div>
             {eyebrow && <p className="console-eyebrow">{eyebrow}</p>}
-            <h2>{title}</h2>
+            <h2>{icon && <span className="console-panel-title-icon" aria-hidden="true">{icon}</span>}{title}</h2>
           </div>
           {action}
         </header>

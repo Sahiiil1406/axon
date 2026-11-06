@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowRight, Check, KeyRound, ShieldOff } from "lucide-react"
+import { ArrowRight, Fingerprint, Check, KeyRound, ShieldOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConsole } from "./model"
 import { validateBudget } from "./api"
@@ -210,8 +210,9 @@ export function PermissionsPage() {
         Sepolia resolves each agent name to its account. The devnet PermissionRegistry stores and enforces its grant.
       </PageHeading>
 
-      {/* Agent selector */}
-      <Panel eyebrow="00 / Select agent" title="Choose authority target">
+      <div className="console-accent-pair console-permission-pair">
+      <div className="console-permission-left">
+      <Panel className="console-panel-cyan" icon={<Fingerprint size={22}/>} eyebrow="00 / Select agent" title="Choose authority target">
         <div className="console-agent-selector">
           <label htmlFor="agent-selector">Authority target</label>
           <select
@@ -249,8 +250,9 @@ export function PermissionsPage() {
           )}
         </div>
       </Panel>
-
       <Panel
+        className="console-panel-neutral"
+        icon={<KeyRound size={22}/>}
         eyebrow="01 / CURRENT GRANT"
         title={
           selectedAgent ? `ENS agent: ${selectedAgent}` : "Onchain authority"
@@ -289,9 +291,14 @@ export function PermissionsPage() {
           />
         </div>
       </Panel>
+      </div>
+
+
 
       <Panel
-        eyebrow="02 / EDIT AUTHORITY"
+        className="console-panel-green"
+        icon={<KeyRound size={22}/>}
+        eyebrow="02 / Edit authority"
         title={
           needsSetup
             ? "Set up agent permissions"
@@ -477,6 +484,9 @@ export function PermissionsPage() {
           </div>
         </form>
       </Panel>
+      </div>
+
+
 
       <Panel
         eyebrow="03 / Demo workflow"

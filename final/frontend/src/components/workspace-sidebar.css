@@ -273,3 +273,23 @@
     font-size: 11px;
   }
 }
+
+/* A quiet vertical scroll indicator, revealed only during interaction. */
+.workspace-sidebar,
+.docs-workspace.axon-docs > .workspace-sidebar {
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  scrollbar-color:transparent transparent;
+  scrollbar-gutter:stable;
+}
+.workspace-sidebar.is-scrolling {
+  scrollbar-color:color-mix(in srgb,var(--foreground) 28%,transparent) transparent;
+}
+.workspace-sidebar::-webkit-scrollbar { width:5px; height:0; }
+.workspace-sidebar::-webkit-scrollbar-track { background:transparent; }
+.workspace-sidebar::-webkit-scrollbar-thumb { background:transparent; border:1px solid transparent; border-radius:8px; background-clip:padding-box; transition:background-color 220ms ease; }
+.workspace-sidebar.is-scrolling::-webkit-scrollbar-thumb { background-color:color-mix(in srgb,var(--foreground) 28%,transparent); }
+.workspace-sidebar.is-scrolling::-webkit-scrollbar-thumb:hover { background-color:color-mix(in srgb,var(--primary) 55%,transparent); }
+.workspace-sidebar nav { scrollbar-width:none; }
+.workspace-sidebar nav::-webkit-scrollbar { display:none; width:0; height:0; }
+@media(prefers-reduced-motion:reduce) { .workspace-sidebar::-webkit-scrollbar-thumb { transition:none; } }
