@@ -1,7 +1,7 @@
 import { ApplicationFlow } from "@/components/brand/application-flow"
 import { AsciiSharks } from "@/components/ascii-sharks"
 import { SiteLink } from "@/components/site-link"
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import {
   ArrowRight,
   ArrowUpRight,
@@ -36,6 +36,8 @@ import {
   CornerMarkers,
   ReferenceFrame,
 } from "@/components/brand/reference-frame"
+
+const LandingShader = lazy(() => import("@/components/brand/landing-shader"))
 
 function tabKeys(event: KeyboardEvent<HTMLDivElement>) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
@@ -340,30 +342,82 @@ function Comparison() {
       </SectionHeading>
       <ReferenceFrame className="revocation-comparison">
         <div className="revocation-event">
-          <span className="revocation-event-icon"><KeyRound size={19} /></span>
-          <div><span className="eyebrow">One owner decision</span><h3>The owner revokes the grant.</h3></div>
-          <span className="revocation-event-badge"><ShieldX size={13} /> Registry updated</span>
+          <span className="revocation-event-icon">
+            <KeyRound size={19} />
+          </span>
+          <div>
+            <span className="eyebrow">One owner decision</span>
+            <h3>The owner revokes the grant.</h3>
+          </div>
+          <span className="revocation-event-badge">
+            <ShieldX size={13} /> Registry updated
+          </span>
         </div>
         <div className="revocation-options">
           <article className="revocation-option">
-            <div className="revocation-option-heading"><span className="revocation-option-icon"><Layers3 size={21} /></span><span>Mirrored authority</span></div>
+            <div className="revocation-option-heading">
+              <span className="revocation-option-icon">
+                <Layers3 size={21} />
+              </span>
+              <span>Mirrored authority</span>
+            </div>
             <h3>The copy still says yes.</h3>
             <p>The registry changed. The account’s local snapshot did not.</p>
             <div className="revocation-snapshot">
-              <div><span>Live registry</span><strong>Revoked</strong><span className="revocation-version">New grant hash</span></div>
-              <div className="revocation-stale"><span>Account’s copy</span><strong>Still active</strong><span className="revocation-version">Previous grant hash</span></div>
+              <div>
+                <span>Live registry</span>
+                <strong>Revoked</strong>
+                <span className="revocation-version">New grant hash</span>
+              </div>
+              <div className="revocation-stale">
+                <span>Account’s copy</span>
+                <strong>Still active</strong>
+                <span className="revocation-version">Previous grant hash</span>
+              </div>
             </div>
-            <div className="revocation-result"><RotateCcw size={17} /><div><strong>Waiting for synchronization</strong><p>The owner must call <code>syncGrant()</code> before the account observes the revocation.</p></div></div>
+            <div className="revocation-result">
+              <RotateCcw size={17} />
+              <div>
+                <strong>Waiting for synchronization</strong>
+                <p>
+                  The owner must call <code>syncGrant()</code> before the
+                  account observes the revocation.
+                </p>
+              </div>
+            </div>
           </article>
           <article className="revocation-option revocation-live">
-            <div className="revocation-option-heading"><AxonMark size={27} /><span>Live authority with Axon</span></div>
+            <Suspense fallback={null}>
+              <LandingShader variant="dithering" className="authority-shader" />
+            </Suspense>
+            <div className="revocation-option-heading">
+              <AxonMark size={27} />
+              <span>Live authority with Axon</span>
+            </div>
             <h3>The next intent sees no.</h3>
             <p>The account reads the current registry during validation.</p>
             <div className="revocation-snapshot">
-              <div><span>Live registry</span><strong>Revoked</strong><span className="revocation-version">New grant hash</span></div>
-              <div className="revocation-fresh"><span>Account’s read</span><strong>Current state</strong><span className="revocation-version">Live grant hash</span></div>
+              <div>
+                <span>Live registry</span>
+                <strong>Revoked</strong>
+                <span className="revocation-version">New grant hash</span>
+              </div>
+              <div className="revocation-fresh">
+                <span>Account’s read</span>
+                <strong>Current state</strong>
+                <span className="revocation-version">Live grant hash</span>
+              </div>
             </div>
-            <div className="revocation-result"><ShieldCheck size={17} /><div><strong>Old authority is rejected</strong><p>Intents signed against the previous grant fail the freshness check. No mirror to synchronize.</p></div></div>
+            <div className="revocation-result">
+              <ShieldCheck size={17} />
+              <div>
+                <strong>Old authority is rejected</strong>
+                <p>
+                  Intents signed against the previous grant fail the freshness
+                  check. No mirror to synchronize.
+                </p>
+              </div>
+            </div>
           </article>
         </div>
       </ReferenceFrame>
@@ -674,11 +728,14 @@ function Developers() {
 }
 function Closing() {
   return (
-    <section className="axon-closing cornered">
+    <section
+      id="build-with-axon"
+      className="axon-closing cornered overflow-hidden"
+    >
       <CornerMarkers />
-      <div className="hero-art" aria-hidden="true">
-        <div className="hero-grain" />
-      </div>
+      <Suspense fallback={null}>
+        <LandingShader variant="radial" className="closing-shader" />
+      </Suspense>
       <span className="eyebrow">The next transaction needs a boundary.</span>
       <h2>
         Autonomous agents.
