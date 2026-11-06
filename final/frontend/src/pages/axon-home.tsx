@@ -1,3 +1,4 @@
+import { SolidityCode } from "@/components/solidity-code"
 import { ApplicationFlow } from "@/components/brand/application-flow"
 import { AsciiSharks } from "@/components/ascii-sharks"
 import { SiteLink } from "@/components/site-link"
@@ -710,7 +711,7 @@ function Developers() {
             </button>
           </div>
           <pre>
-            <code>{example}</code>
+            <SolidityCode source={example} />
           </pre>
           <div className="developer-code-footer">
             <span>Solidity · owner-side configuration</span>
@@ -762,6 +763,7 @@ function Closing() {
   )
 }
 export function AxonHome() {
+
   return (
     <div className="axon-page">
       <Hero />

@@ -1,0 +1,10 @@
+.flow-scroll-story { position:relative; }
+.flow-routed-connectors { position:absolute; left:-28px; top:0; overflow:visible; pointer-events:none; z-index:3; color:var(--axon-cyan); }
+.flow-route-line { fill:none; stroke:var(--axon-cyan); stroke-width:2.6; stroke-linecap:square; stroke-linejoin:miter; }
+.flow-route-underlay { fill:none; stroke:var(--background); stroke-width:7; stroke-linecap:square; stroke-linejoin:miter; }
+.flow-routed-connectors circle { fill:var(--axon-cyan); }
+.flow-routed-connectors rect { fill:#57d8eb; stroke:none; }
+.flow-routed-connectors text { fill:#153337; font:10px var(--font-sans); }
+.flow-diagram-step::after { display:none; }
+.flow-stage-composition .flow-block-wire { display:none!important; }
+.flow-routed-connectors { z-index:1; }

@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle"
 import { SiteLink } from "@/components/site-link"
 import {
   useEffect,
@@ -286,6 +287,7 @@ export function AxonFooter() {
         ))}
       </div>
       <div className="footer-bottom">
+        <ThemeToggle />
         <span>© {new Date().getFullYear()} Axon</span>
         <span>Agent-native permissions. Owner-defined authority.</span>
         <SiteLink
