@@ -67,3 +67,15 @@
 .authority-scenarios button:first-child[aria-pressed="true"],.authority-scenarios button:nth-child(2)[aria-pressed="true"] { background:var(--circuit-green); border-color:var(--circuit-green); }
 .authority-circuit-footer span:nth-child(odd) svg { color:var(--circuit-green); }
 .authority-circuit-footer span:nth-child(even) svg { color:var(--circuit-cyan); }
+
+.authority-circuit .authority-scenarios { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; padding:0; width:100%; margin:0; }
+.authority-circuit .authority-scenarios button { position:relative; display:flex; justify-content:center; align-items:center; min-height:65px; padding:15px 12px; border:0; border-right:1px solid var(--border); border-bottom:1px solid var(--border); background:var(--card); font-size:12px; line-height:1.5; min-width:0; }
+.authority-circuit .authority-scenarios button:last-child { border-right:0; }
+.authority-circuit .authority-scenarios button[aria-pressed="true"] { background:var(--circuit-cyan); color:#153337; }
+.authority-circuit .authority-scenarios button:nth-child(-n+2)[aria-pressed="true"] { background:var(--circuit-green); }
+.authority-circuit .authority-scenarios[data-cycling="true"] button[aria-pressed="true"]::after { content:""; position:absolute; bottom:0; left:0; height:3px; width:100%; background:#15333770; transform-origin:left; animation:authority-scenario-timer 7s linear both; }
+.authority-auto-toggle { display:flex; align-items:center; gap:6px; border:1px solid var(--border); padding:6px 9px; font-size:10px; color:var(--muted-foreground); }
+.authority-circuit-header > span:nth-child(2) { margin-left:auto; }
+@keyframes authority-scenario-timer { from {transform:scaleX(0);} to {transform:scaleX(1);} }
+@media(max-width:650px) { .authority-circuit .authority-scenarios button { flex-direction:column; gap:7px; min-height:85px; padding:11px 6px; font-size:10px; }.authority-circuit .authority-scenarios svg { flex-shrink:0; } }
+@media(prefers-reduced-motion:reduce) { .authority-circuit .authority-scenarios button::after { animation:none!important; } }

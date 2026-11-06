@@ -85,6 +85,10 @@ const AgentsPage = lazy(() =>
   }))
 )
 
+const ProfilePage = lazy(() =>
+  import("@/console/identity-overview").then(module => ({default:module.ProfilePage}))
+)
+
 export function App() {
   return (
     <>
@@ -108,6 +112,7 @@ export function App() {
             <Route path="permissions" element={<PermissionsPage />} />
             <Route path="activity" element={<ActivityPage />} />
             <Route path="agents" element={<AgentsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route path="transactions/:id" element={<TransactionRoute />} />
             <Route
               path="*"
