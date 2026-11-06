@@ -2,6 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (() => {
+        let theme = "dark";
+        try { theme = localStorage.getItem("axon-theme") === "light" ? "light" : "dark"; } catch {}
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <meta name="description" content="The permission and guardrail layer for agentic Web3. Scoped intents, live grants, and an Ethereum alt mempool." />
     <meta name="theme-color" content="#151414" />
     <link rel="icon" type="image/svg+xml" href="/axon.svg" />
