@@ -15,6 +15,8 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
@@ -549,9 +551,23 @@ async function resolveAgentIdentity(name: string) {
   return { name: normalize(name), account: getAddress(account), agentKey: getAddress(agentKey) };
 }
 
+async function readScopedPolicyRoot(account: Address): Promise<string | null> {
+  try {
+    const root = await publicClient.readContract({
+      address: account,
+      abi: parseAbi(["function policyRoot() view returns (uint256)"]),
+      functionName: "policyRoot",
+    });
+    return root.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function readNamedAgent(name: string, defaultPolicy?: {
   grant: GrantStruct;
   allowlist: Record<FunctionId, boolean>;
+  scopedPolicyRoot: string | null;
 }) {
   const agent = await resolveAgentIdentity(name);
   if (!agent) return null;
@@ -566,8 +582,12 @@ async function readNamedAgent(name: string, defaultPolicy?: {
         ]).then(([grant, allowlist]) => ({ grant, allowlist }));
   if (grant.owner === zeroAddress || grant.agentKey.toLowerCase() !== agent.agentKey.toLowerCase())
     return null;
+  const scopedPolicyRoot = defaultPolicy && agent.account.toLowerCase() === ACCOUNT.toLowerCase()
+    ? defaultPolicy.scopedPolicyRoot
+    : await readScopedPolicyRoot(agent.account);
   return {
     ...agent,
+    scopedPolicyRoot,
     active: grant.active,
     budget: grant.budgetPerEpoch,
     version: grant.version,
@@ -576,7 +596,7 @@ async function readNamedAgent(name: string, defaultPolicy?: {
 }
 
 async function readState() {
-  const [counter, grantRaw, allowlist, blockNumber, balance, intentNonce] =
+  const [counter, grantRaw, allowlist, blockNumber, balance, intentNonce, scopedPolicyRoot] =
     await Promise.all([
       readCounter(),
       readGrantRaw(),
@@ -588,10 +608,12 @@ async function readState() {
         abi: ACCOUNT_ABI,
         functionName: "intentNonce",
       }) as Promise<bigint>,
+      readScopedPolicyRoot(ACCOUNT),
     ]);
 
   return {
     ok: true,
+    scopedPolicyRoot,
     checkedAt: new Date().toISOString(),
     worldIdTestSkip,
     worldId: worldIdError ? { error: worldIdError } : { appId: WORLD_ID_APP_ID },
@@ -636,7 +658,7 @@ async function readState() {
       const subs = agentStore.names(normalize(HUMAN_ENS_NAME));
       const resolved = await Promise.all(
         subs.map(async (sub) => {
-          const agent = await readNamedAgent(sub, { grant: grantRaw.grant, allowlist });
+          const agent = await readNamedAgent(sub, { grant: grantRaw.grant, allowlist, scopedPolicyRoot });
           return {
             name: sub,
             registrationTxHash: agentStore.hash(sub),
@@ -648,6 +670,7 @@ async function readState() {
                   budget: agent.budget.toString(),
                   version: agent.version.toString(),
                   allowlist: agent.allowlist,
+                  scopedPolicyRoot: agent.scopedPolicyRoot,
                 }
               : { unresolved: true, localPolicy: agentStore.policy(sub) }),
           };
@@ -1169,6 +1192,26 @@ const frontendOrigins = new Set(
     .filter(Boolean),
 );
 
+const runFile = promisify(execFile);
+let zkDemoRun: Promise<unknown> | undefined;
+
+async function runZkDemo() {
+  const zk = resolve(ROOT, "../zk");
+  if (!existsSync(resolve(zk, "build/verification-key.json")))
+    throw new Error("Build the ZK demo first with bash zk/scripts/setup.sh.");
+  if (!zkDemoRun) {
+    zkDemoRun = runFile(process.execPath, [resolve(zk, "scripts/test.mjs"), "--json"], {
+      cwd: zk,
+      timeout: 45_000,
+      maxBuffer: 256 * 1024,
+      env: { PATH: process.env.PATH },
+    }).then(({ stdout }) => JSON.parse(stdout.trim().split("\n").at(-1)!))
+      .catch(() => { throw new Error("The local ZK demo could not complete. Check the prover setup and try again."); })
+      .finally(() => { zkDemoRun = undefined; });
+  }
+  return zkDemoRun;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(
     req.url ?? "/",
@@ -1190,6 +1233,16 @@ const server = createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "POST" && url.pathname === "/api/zk/demo") {
+      const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+      if (!loopback || (req.headers.origin && !frontendOrigins.has(req.headers.origin))) {
+        json(res, 403, { ok: false, error: "The ZK demo is available from the local console." });
+        return;
+      }
+      json(res, 200, await runZkDemo());
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/ready") {
       json(res, 200, { ok: true, service: "axon-api" });
       return;
@@ -1274,7 +1327,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: Boolean(result.ok),
         result: recorded,
-        state: await readState(),
+        ...(body.includeState === false ? {} : { state: await readState() }),
       });
       return;
     }
@@ -1334,6 +1387,7 @@ const server = createServer(async (req, res) => {
                   budget: agent.budget.toString(),
                   version: agent.version.toString(),
                   allowlist: agent.allowlist,
+                  scopedPolicyRoot: agent.scopedPolicyRoot,
                 }
               : { unresolved: true }),
           };

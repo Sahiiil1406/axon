@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowRight, Fingerprint, Check, KeyRound, ShieldOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConsole } from "./model"
-import { validateBudget } from "./api"
+import { runZkProofDemo, validateBudget } from "./api"
 import {
   Badge,
   ChainLink,
@@ -79,6 +79,23 @@ export function PermissionsPage() {
     worldIdSkipped,
     skipWorldId,
   } = useConsole()
+  const [proofDemo, setProofDemo] = useState<Awaited<ReturnType<typeof runZkProofDemo>>>()
+  const [proofDemoBusy, setProofDemoBusy] = useState(false)
+  const [proofDemoError, setProofDemoError] = useState<string>()
+
+  async function runProofDemo() {
+    setProofDemoBusy(true)
+    setProofDemo(undefined)
+    setProofDemoError(undefined)
+    try {
+      setProofDemo(await runZkProofDemo())
+    } catch (error) {
+      setProofDemoError(error instanceof Error ? error.message : "Proof demo failed.")
+    } finally {
+      setProofDemoBusy(false)
+    }
+  }
+
   const [budget, setBudget] = useState("")
   const [allow, setAllow] = useState<Record<FunctionId, boolean>>({
     increment: false,
@@ -116,6 +133,9 @@ export function PermissionsPage() {
   const disabled = !state || loading || !!error || !!busy
   const needsSetup = !!selectedAgent && (!selectedAgentInfo || !!selectedAgentInfo.unresolved)
   const agentDisabled = disabled || needsSetup
+  const scopedRoot = selectedAgent ? selectedAgentInfo?.scopedPolicyRoot : state?.scopedPolicyRoot
+  const hasScopedPolicy = scopedRoot != null
+  const scopedPolicyActive = hasScopedPolicy && scopedRoot !== "0"
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -296,6 +316,50 @@ export function PermissionsPage() {
 
 
       <Panel
+        eyebrow="Private permissions"
+        title="Scoped ZK policy"
+        action={<Badge tone={scopedPolicyActive ? "good" : "muted"}>
+          {scopedPolicyActive ? "Root committed" : hasScopedPolicy ? "No root set" : "No scoped policy detected"}
+        </Badge>}
+      >
+        <p className="console-help">
+          A scoped proof authorizes one exact call while keeping the rule’s limit and other rules private.
+          The public epoch budget still applies.
+        </p>
+        {scopedPolicyActive && (
+          <DefinitionList rows={[["Policy root", <span className="console-copy-value">
+            <code title={scopedRoot}>{short(scopedRoot, 10, 8)}</code>
+            <CopyButton value={scopedRoot} label="Copy policy root" />
+          </span>]]} />
+        )}
+        <p className="console-help">
+          {hasScopedPolicy
+            ? "Use the Axon skill with the matching --scoped-view file. The SENDER frame verifies the proof."
+            : "Deploy and configure a ScopedAgentAccount to use private proofs. Setup steps are in why zk.md."}
+        </p>
+        <div className="console-permission-actions">
+          <Button type="button" variant="outline" disabled={proofDemoBusy} onClick={() => void runProofDemo()}>
+            {proofDemoBusy ? "Generating and checking proof…" : "Run ZK proof demo"}
+          </Button>
+        </div>
+        <p className="console-help">Local Groth16 check using a sample policy. No transaction is sent.</p>
+        {proofDemoError && <p className="console-inline-error" role="alert">{proofDemoError}</p>}
+        {proofDemo && (
+          <div role="status">
+            <DefinitionList rows={[
+              ["Sample policy root", <span className="console-copy-value">
+                <code title={proofDemo.root}>{short(proofDemo.root, 10, 8)}</code>
+                <CopyButton value={proofDemo.root} label="Copy sample root" />
+              </span>],
+              [`Proof for ${proofDemo.amountWei} wei`, <Badge tone={proofDemo.verified ? "good" : "bad"}>{proofDemo.verified ? "Verified" : "Failed"}</Badge>],
+              ["Same proof with a changed amount", <Badge tone={proofDemo.tamperedAmountRejected ? "good" : "bad"}>{proofDemo.tamperedAmountRejected ? "Rejected by verifier" : "Unexpectedly accepted"}</Badge>],
+              ["Over-limit witness", <Badge tone={proofDemo.overLimitRejected ? "good" : "bad"}>{proofDemo.overLimitRejected ? "Rejected by circuit" : "Unexpectedly accepted"}</Badge>],
+            ]} />
+          </div>
+        )}
+      </Panel>
+
+      <Panel
         className="console-panel-green"
         icon={<KeyRound size={22}/>}
         eyebrow="02 / Edit authority"
@@ -355,7 +419,8 @@ export function PermissionsPage() {
               {invalid}
             </p>
           )}
-          <fieldset className="console-selectors" disabled={disabled}>
+          {!hasScopedPolicy && (
+          <fieldset className="console-selectors" disabled={agentDisabled}>
             <legend>Allowlisted selectors</legend>
             {state?.functions.map((fn) => (
               <label key={fn.id}>
@@ -382,57 +447,20 @@ export function PermissionsPage() {
             ))}
             {selectedAgent && selectedAgentInfo && selectedAgentInfo.allowlist?.length > 0 && (
               <p className="console-help">
-                ENS allowlist: {selectedAgentInfo.allowlist.map((e) => `${e.selector} → ${e.target}`).join(", ")}
+                Devnet allowlist: {selectedAgentInfo.allowlist.map((e) => `${e.selector} → ${e.target}`).join(", ")}
               </p>
             )}
-            <fieldset className="console-selectors" disabled={agentDisabled}>
-              <legend>Allowlisted selectors</legend>
-              {state?.functions.map((fn) => (
-                <label key={fn.id}>
-                  <div>
-                    <strong>{fn.signature}</strong>
-                    <small>
-                      {fn.selector} · {fn.note}
-                    </small>
-                  </div>
-                  <input
-                    type="checkbox"
-                    aria-label={`Allow ${fn.signature}`}
-                    checked={!!allow[fn.id]}
-                    onChange={(e) => {
-                      setAllow((prev) => ({
-                        ...prev,
-                        [fn.id]: e.target.checked,
-                      }))
-                      setDirty(true)
-                    }}
-                  />
-                </label>
-              ))}
-              {selectedAgent &&
-                selectedAgentInfo &&
-                selectedAgentInfo.allowlist.length > 0 && (
-                  <p className="console-help">
-                    ENS allowlist:{" "}
-                    {selectedAgentInfo.allowlist
-                      .map((e) => `${e.selector} → ${e.target}`)
-                      .join(", ")}
-                  </p>
-                )}
-              {!state && (
-                <p className="console-help">
-                  Connect to the API to load the current allowlist.
-                </p>
-              )}
-            </fieldset>
           </fieldset>
+          )}
           {selectedAgentInfo?.account && state?.contracts.agentAccount.toLowerCase() === selectedAgentInfo.account.toLowerCase() && (
             <p className="console-help">
               This ENS name uses the default devnet account. Changes also affect other names using that account.
             </p>
           )}
           <p className="console-help">
-            {needsSetup
+            {hasScopedPolicy
+              ? "This form updates the public epoch budget. The committed root controls the private rules."
+              : needsSetup
               ? "This name needs a valid Sepolia account binding and devnet grant before its permissions can be edited."
               : selectedAgent
               ? `Saving updates the devnet grant for ${selectedAgent}. World ID verification is required.`
