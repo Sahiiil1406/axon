@@ -4164,3 +4164,20 @@ samp {
 .policy-bento-grid > :is(#permissions,#guardrails).policy-outer-frame .section-heading h2 { min-width:0; overflow-wrap:anywhere; }
 .policy-bento-grid > :is(#permissions,#guardrails).policy-outer-frame .section-heading .body-copy { width:auto; max-width:100%; margin:12px 0 0; }
 @media(max-width:540px) { .policy-bento-grid > :is(#permissions,#guardrails).policy-outer-frame .section-heading { padding:34px 18px 18px; } }
+
+/* Architecture map: identity/control in mint, transaction coordination in cyan. */
+.arch-component-green { --arch-accent:#68f2c2; }
+.arch-component-cyan { --arch-accent:#57d8eb; }
+.arch-node-depth { fill:color-mix(in srgb,var(--arch-accent) 45%,var(--border)); }
+.arch-component .arch-node { stroke:color-mix(in srgb,var(--arch-accent) 55%,var(--border)); }
+.arch-node-header { fill:color-mix(in srgb,var(--arch-accent) 16%,var(--card)); }
+.arch-component-icon { color:var(--foreground); }
+.arch-node-title { font-weight:600; }
+.arch-node-detail { font-size:11px; }
+.arch-zone { fill:var(--muted); fill-opacity:.18; stroke:var(--border); stroke-dasharray:3 5; }
+.arch-chain-zone { fill:color-mix(in srgb,#68f2c2 4%,var(--card)); stroke:color-mix(in srgb,#68f2c2 40%,var(--border)); }
+.arch-zone-label { font-size:12px; font-weight:500; }
+.arch-wire,.arch-wire-secondary { stroke:#57d8eb; stroke-width:2; stroke-linejoin:round; }
+.arch-edge-label { font-size:10px; fill:var(--foreground); }
+.arch-label-bg { fill:var(--background); }
+.architecture-system-diagram figcaption { font-size:14px; max-width:65ch; }

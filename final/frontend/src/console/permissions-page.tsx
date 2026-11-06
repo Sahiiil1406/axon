@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowRight, Fingerprint, Check, KeyRound, ShieldOff } from "lucide-react"
+import { ArrowRight, Fingerprint, Check, KeyRound, ShieldOff, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConsole } from "./model"
 import { runZkProofDemo, validateBudget } from "./api"
@@ -315,50 +315,7 @@ export function PermissionsPage() {
 
 
 
-      <Panel
-        eyebrow="Private permissions"
-        title="Scoped ZK policy"
-        action={<Badge tone={scopedPolicyActive ? "good" : "muted"}>
-          {scopedPolicyActive ? "Root committed" : hasScopedPolicy ? "No root set" : "No scoped policy detected"}
-        </Badge>}
-      >
-        <p className="console-help">
-          A scoped proof authorizes one exact call while keeping the rule’s limit and other rules private.
-          The public epoch budget still applies.
-        </p>
-        {scopedPolicyActive && (
-          <DefinitionList rows={[["Policy root", <span className="console-copy-value">
-            <code title={scopedRoot}>{short(scopedRoot, 10, 8)}</code>
-            <CopyButton value={scopedRoot} label="Copy policy root" />
-          </span>]]} />
-        )}
-        <p className="console-help">
-          {hasScopedPolicy
-            ? "Use the Axon skill with the matching --scoped-view file. The SENDER frame verifies the proof."
-            : "Deploy and configure a ScopedAgentAccount to use private proofs. Setup steps are in why zk.md."}
-        </p>
-        <div className="console-permission-actions">
-          <Button type="button" variant="outline" disabled={proofDemoBusy} onClick={() => void runProofDemo()}>
-            {proofDemoBusy ? "Generating and checking proof…" : "Run ZK proof demo"}
-          </Button>
-        </div>
-        <p className="console-help">Local Groth16 check using a sample policy. No transaction is sent.</p>
-        {proofDemoError && <p className="console-inline-error" role="alert">{proofDemoError}</p>}
-        {proofDemo && (
-          <div role="status">
-            <DefinitionList rows={[
-              ["Sample policy root", <span className="console-copy-value">
-                <code title={proofDemo.root}>{short(proofDemo.root, 10, 8)}</code>
-                <CopyButton value={proofDemo.root} label="Copy sample root" />
-              </span>],
-              [`Proof for ${proofDemo.amountWei} wei`, <Badge tone={proofDemo.verified ? "good" : "bad"}>{proofDemo.verified ? "Verified" : "Failed"}</Badge>],
-              ["Same proof with a changed amount", <Badge tone={proofDemo.tamperedAmountRejected ? "good" : "bad"}>{proofDemo.tamperedAmountRejected ? "Rejected by verifier" : "Unexpectedly accepted"}</Badge>],
-              ["Over-limit witness", <Badge tone={proofDemo.overLimitRejected ? "good" : "bad"}>{proofDemo.overLimitRejected ? "Rejected by circuit" : "Unexpectedly accepted"}</Badge>],
-            ]} />
-          </div>
-        )}
-      </Panel>
-
+      <div className="console-permission-right">
       <Panel
         className="console-panel-green"
         icon={<KeyRound size={22}/>}
@@ -512,6 +469,60 @@ export function PermissionsPage() {
           </div>
         </form>
       </Panel>
+      <Panel
+        className="console-panel-cyan console-zk-panel"
+        icon={<ShieldCheck size={22} />}
+        eyebrow="Private permissions"
+        title="Scoped ZK policy"
+        action={<Badge tone={scopedPolicyActive ? "good" : "muted"}>
+          {scopedPolicyActive ? "Root committed" : hasScopedPolicy ? "No root set" : "No scoped policy detected"}
+        </Badge>}
+      >
+        <div className="console-zk-body">
+        <p className="console-zk-intro">
+          A scoped proof authorizes one exact call while keeping the rule’s limit and other rules private.
+          The public epoch budget still applies.
+        </p>
+        <div className="console-zk-flow" aria-label="Scoped proof flow">
+          <span>Private rule</span><ArrowRight size={16} aria-hidden="true" />
+          <span>Scoped proof</span><ArrowRight size={16} aria-hidden="true" />
+          <span>Exact call</span>
+        </div>
+        {scopedPolicyActive && (
+          <DefinitionList rows={[["Policy root", <span className="console-copy-value">
+            <code title={scopedRoot}>{short(scopedRoot, 10, 8)}</code>
+            <CopyButton value={scopedRoot} label="Copy policy root" />
+          </span>]]} />
+        )}
+        <p className="console-help">
+          {hasScopedPolicy
+            ? "Use the Axon skill with the matching --scoped-view file. The SENDER frame verifies the proof."
+            : "Deploy and configure a ScopedAgentAccount to use private proofs. Setup steps are in why zk.md."}
+        </p>
+        <div className="console-permission-actions">
+          <Button type="button" variant="outline" disabled={proofDemoBusy} onClick={() => void runProofDemo()}>
+            {proofDemoBusy ? "Generating and checking proof…" : "Run ZK proof demo"}
+          </Button>
+        </div>
+        <p className="console-help">Local Groth16 check using a sample policy. No transaction is sent.</p>
+        {proofDemoError && <p className="console-inline-error" role="alert">{proofDemoError}</p>}
+        {proofDemo && (
+          <div role="status">
+            <DefinitionList rows={[
+              ["Sample policy root", <span className="console-copy-value">
+                <code title={proofDemo.root}>{short(proofDemo.root, 10, 8)}</code>
+                <CopyButton value={proofDemo.root} label="Copy sample root" />
+              </span>],
+              [`Proof for ${proofDemo.amountWei} wei`, <Badge tone={proofDemo.verified ? "good" : "bad"}>{proofDemo.verified ? "Verified" : "Failed"}</Badge>],
+              ["Same proof with a changed amount", <Badge tone={proofDemo.tamperedAmountRejected ? "good" : "bad"}>{proofDemo.tamperedAmountRejected ? "Rejected by verifier" : "Unexpectedly accepted"}</Badge>],
+              ["Over-limit witness", <Badge tone={proofDemo.overLimitRejected ? "good" : "bad"}>{proofDemo.overLimitRejected ? "Rejected by circuit" : "Unexpectedly accepted"}</Badge>],
+            ]} />
+          </div>
+        )}
+        </div>
+      </Panel>
+
+      </div>
       </div>
 
 
