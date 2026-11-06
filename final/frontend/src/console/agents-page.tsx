@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useState, type ReactNode, type FormEvent } from "react"
 import { ChevronRight, File, Folder, UserPlus, Wallet, KeyRound, ShieldCheck, LoaderCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { registerEnsAgent } from "./api"
@@ -12,9 +12,6 @@ export function AgentsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
   const [createdAgent, setCreatedAgent] = useState<string>()
-  const [registrations, setRegistrations] = useState<
-    Record<string, string | undefined>
-  >({})
   const treeLoading = ensLoading || loading
   const registrationParent = ens.humanName ?? state?.ens?.humanName
   const registeredAgents = new Map(
@@ -23,14 +20,79 @@ export function AgentsPage() {
       agent,
     ])
   )
-  const agentNames = [...new Set([...registeredAgents.keys(), ...Object.keys(registrations)])]
-  const agentsByParent = new Map<string, string[]>()
-  if (registrationParent) agentsByParent.set(registrationParent, [])
-  for (const name of agentNames.sort()) {
-    const parent = registrationParent ?? name.split(".").slice(1).join(".")
-    const children = agentsByParent.get(parent) ?? []
-    children.push(name)
-    agentsByParent.set(parent, children)
+  const hierarchy = new Map((ens.hierarchy ?? state?.ens?.hierarchy ?? []).map(entry => [entry.name, entry]))
+  const agentNames = [...new Set([...hierarchy.keys(), ...registeredAgents.keys()])]
+  const agentsByParent = new Map<string, Set<string>>()
+  const roots = new Set<string>(registrationParent ? [registrationParent] : [])
+  for (const name of agentNames) {
+    const root = registrationParent && name.endsWith(`.${registrationParent}`)
+      ? registrationParent
+      : name.split(".").slice(1).join(".")
+    roots.add(root)
+    let child = name
+    while (child !== root) {
+      const parent = child.split(".").slice(1).join(".")
+      const children = agentsByParent.get(parent) ?? new Set<string>()
+      children.add(child)
+      agentsByParent.set(parent, children)
+      child = parent
+    }
+  }
+
+  function renderBranches(parent: string): ReactNode {
+    return [...(agentsByParent.get(parent) ?? [])].map((name) => {
+      const children = agentsByParent.get(name)
+      const agent = registeredAgents.get(name)
+      const hash = hierarchy.get(name)?.registrationTxHash ?? agent?.registrationTxHash
+      return (
+        <li key={name}>
+          <details className="console-agent-file">
+            <summary>
+              <ChevronRight
+                size={13}
+                className="console-agent-chevron"
+              />
+              {children?.size ? <Folder size={15} /> : <File size={15} />}
+              <span className="console-agent-name">{name.slice(0, -(parent.length + 1))}<small>.{parent}</small></span>
+              {(agent?.ensPublished || hierarchy.has(name)) && <a
+                className="console-chain-link"
+                href={`https://sepolia.app.ens.domains/${encodeURIComponent(name)}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >View on ENS</a>}
+              {hash && <a
+                className="console-chain-link"
+                href={`https://sepolia.etherscan.io/tx/${encodeURIComponent(hash)}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
+                Sepolia transaction
+              </a>}
+            </summary>
+            {agent && <div className="console-agent-file-details">
+              <CopyButton value={name} label="Copy name" />
+                            <div className="console-tree-records">
+                              <details open>
+                                <summary><Wallet size={15} /> Account <ChevronRight size={13} className="console-agent-chevron" /></summary>
+                                <ChainLink value={agent?.account} />
+                              </details>
+                              <details>
+                                <summary><KeyRound size={15} /> Signing key <ChevronRight size={13} className="console-agent-chevron" /></summary>
+                                <ChainLink value={agent?.agentKey} />
+                              </details>
+                              <details>
+                                <summary><ShieldCheck size={15} /> Spending authority <ChevronRight size={13} className="console-agent-chevron" /></summary>
+                                <p>{agent?.budget != null ? `${eth(agent.budget)} ETH per epoch` : "No budget available"}</p>
+                              </details>
+                            </div>
+            </div>}
+            {!!children?.size && <ul className="console-agent-branches">{renderBranches(name)}</ul>}
+          </details>
+        </li>
+      )
+    })
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -49,10 +111,6 @@ export function AgentsPage() {
         worldIdProof: takeWorldIdProof(),
       })
       setCreatedAgent(result.agent)
-      setRegistrations((previous) => ({
-        ...previous,
-        [result.agent]: result.txs.at(-1)?.hash ?? previous[result.agent],
-      }))
       setSubdomain("")
       await refreshEns()
     } catch (error) {
@@ -84,7 +142,7 @@ export function AgentsPage() {
           </Button>
         }
       >
-
+        {ens.error && <p className="console-inline-error" role="alert">{ens.error}</p>}
         <div className="console-tree-status" role="status" aria-live="polite">
           {treeLoading ? <><LoaderCircle size={16} className="console-spin" />
             <span>{agentNames.length ? "Refreshing ENS names and identity records…" : "Loading ENS names and identity records…"}</span></>
@@ -95,69 +153,22 @@ export function AgentsPage() {
         {treeLoading && !agentNames.length ? <div className="console-tree-skeleton" aria-hidden="true">
           <span /><span /><span />
         </div> : <ul className="console-agent-tree">
-          {[...agentsByParent].map(([parent, names]) => (
+          {[...roots].map((parent) => (
             <li key={parent}>
               <details className="console-agent-folder" open>
                 <summary>
                   <ChevronRight size={13} className="console-agent-chevron" />
                   <Folder size={16} />
                   <strong>{parent}</strong>
-                  <span className="console-tree-count">{names.length} agents</span>
                 </summary>
-                {!names.length && <p className="console-tree-empty">Your namespace is ready. Register your first agent to grow this tree.</p>}
                 <ul className="console-agent-branches">
-                  {names.map((name) => {
-                    const agent = registeredAgents.get(name)
-                    const hash = registrations[name] ?? agent?.registrationTxHash
-                    return (
-                      <li key={name}>
-                        <details className="console-agent-file">
-                          <summary>
-                            <ChevronRight
-                              size={13}
-                              className="console-agent-chevron"
-                            />
-                            <File size={15} />
-                            <span className="console-agent-name">{name.replace(`.${parent}`, "")}<small>.{parent}</small></span>
-                            <a
-                              className="console-chain-link"
-                              href={hash
-                                ? `https://sepolia.etherscan.io/tx/${encodeURIComponent(hash)}`
-                                : `https://sepolia.app.ens.domains/${encodeURIComponent(name)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {hash ? "Sepolia transaction" : "View on ENS"}
-                            </a>
-                          </summary>
-                          <div className="console-agent-file-details">
-                            <CopyButton value={name} label="Copy name" />
-                            <div className="console-tree-records">
-                              <details open>
-                                <summary><Wallet size={15} /> Account <ChevronRight size={13} className="console-agent-chevron" /></summary>
-                                <ChainLink value={agent?.account} />
-                              </details>
-                              <details>
-                                <summary><KeyRound size={15} /> Signing key <ChevronRight size={13} className="console-agent-chevron" /></summary>
-                                <ChainLink value={agent?.agentKey} />
-                              </details>
-                              <details>
-                                <summary><ShieldCheck size={15} /> Spending authority <ChevronRight size={13} className="console-agent-chevron" /></summary>
-                                <p>{agent?.budget != null ? `${eth(agent.budget)} ETH per epoch` : "No budget available"}</p>
-                              </details>
-                            </div>
-                          </div>
-                        </details>
-                      </li>
-                    )
-                  })}
+                  {renderBranches(parent)}
                 </ul>
               </details>
             </li>
           ))}
         </ul>}
-        {!treeLoading && !registrationParent && !agentNames.length && <p className="console-help">No ENS namespace configured yet.</p>}
+        {!treeLoading && !ens.error && !agentNames.length && <p className="console-help">No registered ENS subnames yet.</p>}
         </div>
       </Panel>
       <Panel className="console-panel-green" icon={<UserPlus size={22}/>} eyebrow="02 / Create agent" title="Register a new agent subdomain">
@@ -168,13 +179,13 @@ export function AgentsPage() {
               id="create-name"
               value={subdomain}
               onChange={(event) => setSubdomain(event.target.value)}
-              placeholder="analyst"
+              placeholder="analyst or analyst.team"
               required
             />
           </label>
           {registrationParent ? (
             <p className="console-muted">
-              Registers under {registrationParent}.
+              Registers under {registrationParent}. Use up to three labels, such as analyst.team.ops.
             </p>
           ) : (
             <p className="console-help">

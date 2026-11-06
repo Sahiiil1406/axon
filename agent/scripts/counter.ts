@@ -42,12 +42,20 @@ async function run() {
     name = normalize(name)
     const ens = createPublicClient({ chain: sepolia, transport: http(required("SEPOLIA_RPC"), { timeout: 8000, retryCount: 0 }) })
     if (await ens.getChainId() !== sepolia.id) throw new Error("ENS RPC is not connected to Sepolia.")
-    const resolver = getAddress(required("ENS_REGISTRY"))
-    const abi = parseAbi(["function text(string name, string key) view returns (string)"])
     const resolvedName = name
-    const [accountRecord, keyRecord] = await Promise.all(["axon.account", "axon.agentKey"].map(key =>
-      ens.readContract({ address: resolver, abi, functionName: "text", args: [resolvedName, key] })
-    ))
+    const keys = ["axon.account", "axon.agentKey"]
+    let [accountRecord, keyRecord] = await Promise.all(keys.map(key =>
+      ens.getEnsText({ name: resolvedName, key })
+    )).catch(() => [null, null])
+    if (!accountRecord && !keyRecord && env.ENS_REGISTRY) {
+      const resolver = getAddress(env.ENS_REGISTRY)
+      const abi = parseAbi(["function text(string name, string key) view returns (string)"])
+      const legacy = await Promise.all(keys.map(key =>
+        ens.readContract({ address: resolver, abi, functionName: "text", args: [resolvedName, key] })
+      ))
+      accountRecord = legacy[0]
+      keyRecord = legacy[1]
+    }
     if (!accountRecord || !keyRecord) throw new Error(`No Axon account binding for ${name}.`)
     account = getAddress(accountRecord)
     namedKey = getAddress(keyRecord)

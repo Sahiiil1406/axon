@@ -65,7 +65,6 @@ Use the matching RP signing key and signer address from your working setup. Conf
 ### Optional configuration
 
 - `AXON_FRONTEND_ORIGINS=https://your-service.onrender.com`: explicit origin allowlist if needed. The bundled frontend uses same-origin requests.
-- `AGENT_STORE_FILE=/var/data/agent-registrations.json`: use with an attached Render persistent disk mounted at `/var/data`.
 - `FINAL_DEPLOYMENTS_FILE`: optional absolute path to a different deployment JSON.
 - `BUILD_ZK=true`: also installs ZK tooling and prepares missing local proof artifacts during build. This can substantially increase build time. Existing proving keys are not overwritten.
 
@@ -89,7 +88,7 @@ The build intentionally clears `VITE_AXON_API_URL` so production assets use rela
 
 ## Storage and restarts
 
-Render's default filesystem is ephemeral. Attach a persistent disk and set `AGENT_STORE_FILE` if the local ENS registration index must survive deploys. The parent disk directory must exist. Transaction history is currently process-memory state and resets on restart even with a disk; onchain transactions are unaffected.
+Axon reads the agent hierarchy from Sepolia ENSv2 after each restart. Transaction history is held in process memory and resets on restart. Onchain transactions remain available in the explorer.
 
 Generated frontend files are ignored by Git. Commit the scripts, server changes and `render.yaml`; Render builds the assets from source. The process runs TypeScript through the server's installed `tsx`, so the build explicitly installs development dependencies and must not be followed by pruning them.
 
