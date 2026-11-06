@@ -1443,10 +1443,11 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`FinalCounter demo  http://localhost:${PORT}`);
+  const listenHost = HOST.includes(":") ? `[${HOST}]` : HOST;
+  console.log(`FinalCounter demo  http://${listenHost}:${PORT}`);
   console.log(`  counter          ${COUNTER}`);
   console.log(`  agent account    ${ACCOUNT}`);
   console.log(`  registry         ${REGISTRY}`);
-  if (!API_ONLY) console.log(`  console          http://localhost:${PORT}/app`);
+  if (!API_ONLY) console.log(`  console          http://${listenHost}:${PORT}/app`);
   console.log(`  rpc host         ${new URL(RPC).hostname}`);
 });
