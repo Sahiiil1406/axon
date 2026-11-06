@@ -2,6 +2,7 @@ import { useState } from "react"
 import {
   ArrowRight,
   Fingerprint,
+  Globe,
   LockKeyhole,
   UserRound,
   Wallet,
@@ -29,9 +30,23 @@ import {
   short,
 } from "./format"
 import { HistoryTable, Receipt } from "./transactions"
-import type { CallResult, FunctionId, Lane } from "./types"
+import type {
+  AgentInfo,
+  CallResult,
+  CallRestrictions,
+  FunctionId,
+  Lane,
+} from "./types"
 
-function LaneCard({ lane, result }: { lane: Lane; result?: CallResult }) {
+function LaneCard({
+  lane,
+  result,
+  agent,
+}: {
+  lane: Lane
+  result?: CallResult
+  agent?: string | null
+}) {
   const status = resultStatus(result)
   const Icon = lane === "human" ? UserRound : Fingerprint
   return (
@@ -40,6 +55,7 @@ function LaneCard({ lane, result }: { lane: Lane; result?: CallResult }) {
         <span>
           <Icon size={16} />
           {lane === "human" ? "Human lane" : "Agent lane"}
+          {agent && <span className="console-lane-agent">· {agent}</span>}
         </span>
         <Badge tone={status.tone}>{status.label}</Badge>
       </header>
@@ -102,23 +118,60 @@ function LaneCard({ lane, result }: { lane: Lane; result?: CallResult }) {
   )
 }
 export function DemoPage() {
-  const { state, loading, error, busy, call, last } = useConsole()
+  const {
+    state,
+    loading,
+    error,
+    busy,
+    call,
+    last,
+    ens,
+    callRestrictions,
+    setCallRestriction,
+  } = useConsole()
   const [selected, setSelected] = useState<FunctionId>("increment")
   const [amount, setAmount] = useState("0.05")
   const [validation, setValidation] = useState<string | null>(null)
+  const [agentName, setAgentName] = useState<string | null>(null)
   const fn =
     state?.functions.find((f) => f.id === selected) ?? state?.functions[0]
   const disabled = !state || loading || !!error || !!busy
   async function run(lane: Lane) {
     if (!fn) return
+
+    // Agent call restrictions
+    if (lane === "agent") {
+      if (!callRestrictions.agentEnabled) {
+        setValidation("Agent calls are disabled by restriction toggle.")
+        return
+      }
+      if (!callRestrictions.allowedFunctions[fn.id]) {
+        setValidation(`${fn.signature} is not allowed for agent calls.`)
+        return
+      }
+      if (
+        callRestrictions.maxSpendPerCall != null &&
+        fn.needsAmount
+      ) {
+        const amountWei = BigInt(amount.trim()) * 10n ** 18n
+        if (amountWei > callRestrictions.maxSpendPerCall) {
+          setValidation(
+            `Spend exceeds max per call (${eth(callRestrictions.maxSpendPerCall.toString())} ETH).`
+          )
+          return
+        }
+      }
+    }
+
     const invalid = fn.needsAmount ? validateAmount(amount) : null
     setValidation(invalid)
     if (invalid) return
-    await call(lane, fn.id, fn.needsAmount ? amount.trim() : null)
+    await call(lane, fn.id, fn.needsAmount ? amount.trim() : null, agentName || undefined)
   }
   const same =
     last.human && last.agent && last.human.function === last.agent.function
   const latest = state?.history[0]
+  const agentOptions = ens?.agents ?? state?.ens?.agents ?? []
   return (
     <>
       <PageHeading
@@ -149,7 +202,101 @@ export function DemoPage() {
             {short(state?.grant.grantHash, 8, 6)}
           </code>
         </span>
+        {agentName && (
+          <span>
+            <Globe size={14} /> ENS agent: <strong>{agentName}</strong>
+          </span>
+        )}
       </div>
+      {agentOptions.length > 0 && (
+        <div className="console-agent-selector">
+          <label htmlFor="demo-agent-selector">Call as ENS agent</label>
+          <select
+            id="demo-agent-selector"
+            value={agentName ?? ""}
+            onChange={(e) => setAgentName(e.target.value || null)}
+            disabled={disabled}
+          >
+            <option value="">Default agent account</option>
+            {agentOptions.map((a) => (
+              <option key={a.name} value={a.name}>
+                {a.name} ({a.active ? "active" : "revoked"})
+              </option>
+            ))}
+          </select>
+          <p className="console-help">
+            Selecting an ENS agent resolves its subdomain and uses its
+            Permissioned Resolver text records for the call.
+          </p>
+        </div>
+      )}
+      <Panel
+        eyebrow="00 / CALL RESTRICTIONS"
+        title="Agent call rules"
+        action={
+          <Badge tone={callRestrictions.agentEnabled ? "good" : "bad"}>
+            {callRestrictions.agentEnabled ? "Agent enabled" : "Agent disabled"}
+          </Badge>
+        }
+      >
+        <div className="console-restrictions">
+          <label className="console-toggle-row">
+            <input
+              type="checkbox"
+              checked={callRestrictions.agentEnabled}
+              onChange={(e) =>
+                setCallRestriction("agentEnabled", e.target.checked)
+              }
+              disabled={disabled}
+            />
+            <span>Enable agent lane</span>
+          </label>
+          <div className="console-function-toggles">
+            <span className="console-toggle-label">Allowed functions:</span>
+            {state?.functions.map((f) => (
+              <label key={f.id} className="console-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={callRestrictions.allowedFunctions[f.id]}
+                  onChange={(e) =>
+                    setCallRestriction("allowedFunctions", {
+                      ...callRestrictions.allowedFunctions,
+                      [f.id]: e.target.checked,
+                    })
+                  }
+                  disabled={
+                    disabled || !callRestrictions.agentEnabled
+                  }
+                />
+                <span>{f.signature}</span>
+              </label>
+            ))}
+          </div>
+          <label className="console-toggle-row">
+            <span>Max spend per call (ETH)</span>
+            <input
+              type="text"
+              value={
+                callRestrictions.maxSpendPerCall == null
+                  ? ""
+                  : eth(callRestrictions.maxSpendPerCall.toString())
+              }
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (!v) {
+                  setCallRestriction("maxSpendPerCall", null)
+                } else {
+                  const n = BigInt(v) * 10n ** 18n
+                  setCallRestriction("maxSpendPerCall", n)
+                }
+              }}
+              disabled={disabled || !callRestrictions.agentEnabled}
+              placeholder="no limit"
+            />
+          </label>
+        </div>
+      </Panel>
+
       <dl className="console-stats">
         <Stat
           label="Human count"
@@ -347,7 +494,7 @@ export function DemoPage() {
         >
           <div className="console-lanes">
             <LaneCard lane="human" result={last.human} />
-            <LaneCard lane="agent" result={last.agent} />
+            <LaneCard lane="agent" result={last.agent} agent={agentName} />
           </div>
           <div className="console-compare-foot">
             {last.human && last.agent ? (

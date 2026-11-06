@@ -3,10 +3,20 @@ import {
   http,
   type Abi,
   type Address,
+  type Chain,
   type Hex,
   type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+import {
+  getEnsAddress,
+  getEnsName,
+  getEnsResolver,
+  getEnsText,
+  normalize,
+  type GetEnsTextParameters,
+} from "viem/ens";
 import { encodeFrameTx } from "./frame/encoder.ts";
 import { bytesToHex } from "./frame/rlp.ts";
 import type { FrameTx, FrameTxJson } from "./frame/types.ts";
@@ -36,6 +46,10 @@ export interface AxonConfig {
   rpc?: string;
   sidecar?: string;
   stakingRegistry?: Address;
+  /** Sepolia RPC for ENSv2 resolution (agent identity/control plane). */
+  ensRpc?: string;
+  /** ENSv2 chain id for Sepolia (default 11155111). */
+  ensChainId?: number;
 }
 
 export interface Grant {
@@ -66,6 +80,18 @@ export interface VaultState {
 export interface SimulatedFrame {
   gasUsed: string;
   succeeded: boolean;
+}
+
+/** Agent permission resolved from an ENSv2 subdomain's Permissioned Resolver text records. */
+export interface AgentPermission {
+  name: string;
+  account: Address | null;
+  agentKey: Address | null;
+  active: boolean;
+  budget: bigint;
+  version: bigint;
+  allowlist: Array<{ target: Address; selector: Hex }>;
+  textRecords: Record<string, string>;
 }
 
 export interface SimulateResult {
@@ -196,8 +222,14 @@ const ascii = (hex: string): string => {
 };
 
 export class AxonClient {
-  readonly config: Required<Omit<AxonConfig, "stakingRegistry">> & { stakingRegistry?: Address };
+  readonly config: Required<Omit<AxonConfig, "stakingRegistry" | "ensRpc" | "ensChainId">> & {
+    stakingRegistry?: Address;
+    ensRpc?: string;
+    ensChainId?: number;
+  };
   readonly publicClient: PublicClient;
+  /** Sepolia public client for ENSv2 resolution (undefined when no ensRpc is configured). */
+  readonly ensPublicClient: PublicClient | undefined;
   /** Derived from the key, not from the registry, so a stale grant cannot misroute the witness. */
   readonly agentAddress: Address;
 
@@ -206,9 +238,16 @@ export class AxonClient {
       chainId: 1337,
       rpc: "https://altmempool.forshtat.com",
       sidecar: "https://altmempool.forshtat.com/rpc",
+      ensChainId: 11155111,
       ...config,
     };
     this.publicClient = createPublicClient({ transport: http(this.config.rpc) }) as PublicClient;
+    this.ensPublicClient = this.config.ensRpc
+      ? createPublicClient({
+          chain: sepolia,
+          transport: http(this.config.ensRpc),
+        })
+      : undefined;
     this.agentAddress = privateKeyToAccount(config.agentPrivateKey).address;
   }
 
@@ -286,6 +325,86 @@ export class AxonClient {
 
   async getBlockTimestamp(): Promise<bigint> {
     return (await this.publicClient.getBlock({ blockTag: "latest" })).timestamp;
+  }
+
+  // -------------------------------------------------------------------
+  // ENSv2 — agent identity & permission resolution (Sepolia)
+  // -------------------------------------------------------------------
+
+  /** Normalize an ENS name (e.g. "trader.alice.eth"). */
+  normalizeEnsName(name: string): string {
+    return normalize(name);
+  }
+
+  /** Resolve an ENS name to its address (the agent's AgentAccount on the devnet). */
+  async resolveEnsAddress(name: string): Promise<Address | null> {
+    if (!this.ensPublicClient) return null;
+    try {
+      return await getEnsAddress(this.ensPublicClient, {
+        name: this.normalizeEnsName(name),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /** Read a single text record from an ENS name's resolver. */
+  async getEnsTextRecord(
+    name: string,
+    key: string,
+  ): Promise<string | null> {
+    if (!this.ensPublicClient) return null;
+    try {
+      return await getEnsText(this.ensPublicClient, {
+        name: this.normalizeEnsName(name),
+        key,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /** Resolve an agent subdomain (e.g. `trader.alice.eth`) to its full permission set. */
+  async resolveAgent(name: string): Promise<AgentPermission | null> {
+    if (!this.ensPublicClient) return null;
+
+    const normalized = this.normalizeEnsName(name);
+    const [account, agentKey, active, budget, version, allowlistRaw] =
+      await Promise.all([
+        this.getEnsTextRecord(name, "axon.account"),
+        this.getEnsTextRecord(name, "axon.agentKey"),
+        this.getEnsTextRecord(name, "axon.active"),
+        this.getEnsTextRecord(name, "axon.budget"),
+        this.getEnsTextRecord(name, "axon.version"),
+        this.getEnsTextRecord(name, "axon.allowlist"),
+      ]);
+
+    if (!account || !agentKey) return null;
+
+    const allowlist: Array<{ target: Address; selector: Hex }> = [];
+    if (allowlistRaw) {
+      try {
+        for (const entry of allowlistRaw.split(",")) {
+          const [target, selector] = entry.trim().split(":");
+          if (target && selector) {
+            allowlist.push({ target: target as Address, selector: selector as Hex });
+          }
+        }
+      } catch {
+        // Malformed allowlist — leave empty.
+      }
+    }
+
+    return {
+      name: normalized,
+      account: account as Address,
+      agentKey: agentKey as Address,
+      active: active === "true",
+      budget: budget ? BigInt(budget) : 0n,
+      version: version ? BigInt(version) : 0n,
+      allowlist,
+      textRecords: {},
+    };
   }
 
   async getVaultState(): Promise<VaultState> {

@@ -1,12 +1,17 @@
+import type { IDKitResultSession } from "@worldcoin/idkit"
 import { createContext, useContext } from "react"
 import type {
+  AgentInfo,
   CallResult,
+  CallRestrictions,
   ConsoleState,
+  EnsState,
   FunctionId,
   Lane,
   OwnerTransaction,
   PermissionInput,
   Tone,
+  WorldIdStatus,
 } from "./types"
 export interface ConsoleModel {
   state: ConsoleState | null
@@ -16,9 +21,17 @@ export interface ConsoleModel {
   notice: { message: string; tone: Tone } | null
   last: Partial<Record<Lane, CallResult>>
   ownerTransactions: OwnerTransaction[]
+  ens: EnsState
+  ensLoading: boolean
+  takeWorldIdProof: () => IDKitResultSession | undefined
+  worldIdStatus: WorldIdStatus
+  callRestrictions: CallRestrictions
   refresh: () => Promise<void>
-  call: (lane: Lane, fn: FunctionId, amount: string | null) => Promise<boolean>
+  refreshEns: () => Promise<void>
+  call: (lane: Lane, fn: FunctionId, amount: string | null, agentName?: string) => Promise<boolean>
   permission: (input: PermissionInput) => Promise<boolean>
+  verifyWorldId: () => Promise<boolean>
+  setCallRestriction: (key: keyof CallRestrictions, value: unknown) => void
   path: string
 }
 export const ConsoleContext = createContext<ConsoleModel | null>(null)

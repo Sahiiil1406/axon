@@ -1,3 +1,4 @@
+import { signRequest } from "@worldcoin/idkit-core/signing";
 /**
  * FinalCounter demo server.
  *
@@ -26,13 +27,17 @@ import {
   http,
   parseEther,
   parseAbi,
+  getAddress,
   isAddress,
   toFunctionSelector,
   type Abi,
   type Address,
   type Hex,
+  type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+import { getEnsText, normalize } from "viem/ens";
 import { AxonClient } from "@axon/sdk";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
@@ -79,6 +84,50 @@ const HOST = process.env.FINAL_HOST ?? process.env.HOST ?? "127.0.0.1";
 if (!Number.isSafeInteger(CHAIN_ID) || CHAIN_ID <= 0) throw new Error("CHAIN_ID must be a positive integer");
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("FINAL_PORT must be between 1 and 65535");
 const EXPLORER = "https://altmempoolexplorer.forshtat.com/tx/";
+
+// ENSv2 (Sepolia) — agent identity & permission control plane
+const SEPOLIA_RPC = process.env.SEPOLIA_RPC;
+const configuredSepoliaOwnerKey = process.env.SEPOLIA_OWNER_PRIVATE_KEY?.trim();
+const SEPOLIA_OWNER_PK = configuredSepoliaOwnerKey?.replace(/^(?:0x)?/i, "0x");
+const configuredEnsRegistry = process.env.ENS_REGISTRY?.trim();
+const ENS_REGISTRY = configuredEnsRegistry && isAddress(configuredEnsRegistry, { strict: false })
+  ? getAddress(configuredEnsRegistry)
+  : undefined;
+const HUMAN_ENS_NAME = process.env.HUMAN_ENS_NAME; // e.g. "alice.eth"
+const WORLD_ID_APP_ID = process.env.WORLD_ID_APP_ID?.trim();
+const WORLD_ID_RP_ID = process.env.WORLD_ID_RP_ID?.trim();
+const WORLD_ID_VERIFIER_URL = process.env.WORLD_ID_VERIFIER_URL?.trim().replace(/\/+$/, "") || "https://developer.world.org/api/v4";
+const worldIdSignerAddress = process.env.WORLD_ID_SIGNER_ADDRESS?.trim();
+const worldIdSigningKey = process.env.WORLD_ID_RP_SIGNING_KEY?.trim().replace(/^(?:0x)?/i, "0x");
+const worldIdNonces = new Map<string, number>();
+
+function worldIdConfigurationError(): string | undefined {
+  if (!/^app_[a-f0-9]{32}$/i.test(WORLD_ID_APP_ID ?? "")) return "Set WORLD_ID_APP_ID to the production App ID.";
+  if (!/^rp_[a-f0-9]{16}$/i.test(WORLD_ID_RP_ID ?? "")) return "Set WORLD_ID_RP_ID to the portal's Relying Party ID.";
+  if (!worldIdSigningKey || !/^0x[a-f0-9]{64}$/i.test(worldIdSigningKey))
+    return "Set WORLD_ID_RP_SIGNING_KEY in final/server/.env to the RP signing key from the portal.";
+  try {
+    const signer = privateKeyToAccount(worldIdSigningKey as Hex).address;
+    if (signer.toLowerCase() !== worldIdSignerAddress?.toLowerCase())
+      return "WORLD_ID_RP_SIGNING_KEY must match WORLD_ID_SIGNER_ADDRESS.";
+  } catch {
+    return "WORLD_ID_RP_SIGNING_KEY is invalid.";
+  }
+}
+const worldIdError = worldIdConfigurationError();
+
+let ensPublicClient: PublicClient | undefined;
+let ensOwnerWallet: ReturnType<typeof createWalletClient> | undefined;
+if (SEPOLIA_RPC) {
+  ensPublicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC) });
+}
+if (SEPOLIA_OWNER_PK && /^0x[0-9a-fA-F]{64}$/.test(SEPOLIA_OWNER_PK) && ensPublicClient) {
+  ensOwnerWallet = createWalletClient({
+    account: privateKeyToAccount(SEPOLIA_OWNER_PK as Hex),
+    chain: sepolia,
+    transport: http(SEPOLIA_RPC),
+  });
+}
 
 function privateKey(name: string): Hex {
   const value = process.env[name];
@@ -197,6 +246,20 @@ const REGISTRY_ABI = [
     name: "revoke",
     stateMutability: "nonpayable",
     inputs: [{ name: "account", type: "address" }],
+    outputs: [],
+  },
+] as const satisfies Abi;
+
+const ENS_TEXT_ABI = [
+  {
+    type: "function",
+    name: "setText",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "key", type: "string" },
+      { name: "value", type: "string" },
+    ],
     outputs: [],
   },
 ] as const satisfies Abi;
@@ -432,6 +495,66 @@ async function readAllowlist() {
   return Object.fromEntries(entries) as Record<FunctionId, boolean>;
 }
 
+// Agent subdomains created under a human ENS name (in-memory registry for the demo).
+// Key = parent name (e.g. "alice.eth"), value = agent subdomain names (e.g. ["trader.alice.eth"]).
+const agentSubdomains = new Map<string, string[]>();
+const agentRegistrationHashes = new Map<string, Hex>();
+const activeEnsRegistrations = new Set<string>();
+const pendingEnsRegistrationWrites = new Map<string, { hash: Hex; value: string }>();
+
+async function readEnsTextRecord(name: string, key: string): Promise<string | null> {
+  if (!ensPublicClient) return null;
+  try {
+    return await getEnsText(ensPublicClient, {
+      name: normalize(name),
+      key,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAgentFromEns(name: string): Promise<{
+  name: string;
+  account: Address | null;
+  agentKey: Address | null;
+  active: boolean;
+  budget: bigint;
+  version: bigint;
+  allowlist: Array<{ target: Address; selector: Hex }>;
+} | null> {
+  const [account, agentKey, active, budget, version, allowlistRaw] = await Promise.all([
+    readEnsTextRecord(name, "axon.account"),
+    readEnsTextRecord(name, "axon.agentKey"),
+    readEnsTextRecord(name, "axon.active"),
+    readEnsTextRecord(name, "axon.budget"),
+    readEnsTextRecord(name, "axon.version"),
+    readEnsTextRecord(name, "axon.allowlist"),
+  ]);
+
+  if (!account || !agentKey) return null;
+
+  const allowlist: Array<{ target: Address; selector: Hex }> = [];
+  if (allowlistRaw) {
+    for (const entry of allowlistRaw.split(",")) {
+      const [target, selector] = entry.trim().split(":");
+      if (target && selector && isAddress(target)) {
+        allowlist.push({ target: target as Address, selector: selector as Hex });
+      }
+    }
+  }
+
+  return {
+    name: normalize(name),
+    account: account as Address,
+    agentKey: agentKey as Address,
+    active: active === "true",
+    budget: budget ? BigInt(budget) : 0n,
+    version: version ? BigInt(version) : 0n,
+    allowlist,
+  };
+}
+
 async function readState() {
   const [counter, grantRaw, allowlist, blockNumber, balance, intentNonce] =
     await Promise.all([
@@ -450,6 +573,7 @@ async function readState() {
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
+    worldId: worldIdError ? { error: worldIdError } : { appId: WORLD_ID_APP_ID },
     network: {
       chainId: CHAIN_ID,
       rpc: RPC,
@@ -486,6 +610,30 @@ async function readState() {
     agentBalanceEth: eth(balance),
     intentNonce: intentNonce.toString(),
     history,
+    ens: await (async () => {
+      if (!HUMAN_ENS_NAME) return { humanName: null, agents: [] };
+      const subs = agentSubdomains.get(HUMAN_ENS_NAME) ?? [];
+      const resolved = await Promise.all(
+        subs.map(async (sub) => {
+          const agent = await resolveAgentFromEns(sub);
+          return {
+            name: sub,
+            registrationTxHash: agentRegistrationHashes.get(sub),
+            ...(agent
+              ? {
+                  account: agent.account,
+                  agentKey: agent.agentKey,
+                  active: agent.active,
+                  budget: agent.budget.toString(),
+                  version: agent.version.toString(),
+                  allowlist: agent.allowlist,
+                }
+              : { unresolved: true }),
+          };
+        }),
+      );
+      return { humanName: HUMAN_ENS_NAME, agents: resolved };
+    })(),
   };
 }
 
@@ -853,6 +1001,152 @@ async function updatePermission(body: Record<string, unknown>) {
   return { ok: true, txs, state: await readState() };
 }
 
+// -------------------------------------------------------------------
+// World ID Agent Pass — human approval gate for authority changes
+// -------------------------------------------------------------------
+
+async function verifyWorldIdProof(proof: unknown): Promise<{ valid: boolean; reason?: string }> {
+  if (worldIdError) return { valid: false, reason: worldIdError };
+  if (!proof || typeof proof !== "object")
+    return { valid: false, reason: "Complete the World ID prompt before submitting." };
+  const result = proof as Record<string, unknown>;
+  if (result.protocol_version !== "4.0" || "action" in result ||
+      typeof result.session_id !== "string" || !result.session_id.startsWith("session_") ||
+      !Array.isArray(result.responses) || !result.responses.some((response) => response?.identifier === "proof_of_human") ||
+      result.environment !== "production" || typeof result.nonce !== "string")
+    return { valid: false, reason: "The proof does not match Axon's World ID request." };
+
+  const nonce = result.nonce;
+  const expiresAt = worldIdNonces.get(nonce);
+  if (!expiresAt || expiresAt <= Date.now() / 1000)
+    return { valid: false, reason: "This World ID request expired or was already used. Verify again." };
+  worldIdNonces.delete(nonce);
+
+  try {
+    const res = await fetch(`${WORLD_ID_VERIFIER_URL}/verify/${encodeURIComponent(WORLD_ID_RP_ID!)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(result),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const verification = await res.json().catch(() => null);
+    if (res.ok && verification?.success === true && verification.environment === "production")
+      return { valid: true };
+    return { valid: false, reason: verification?.detail ?? `World ID verification rejected (HTTP ${res.status})` };
+  } catch (error) {
+    return { valid: false, reason: `Could not reach the World ID verifier: ${(error as Error).message}` };
+  }
+}
+
+/** Owner-scoped permission update for a specific agent subdomain.
+ * Writes ENS text records (Sepolia) + syncs axon PermissionRegistry (devnet).
+ * Requires a valid World ID Agent Pass proof before any state change.
+ */
+async function updatePermissionForAgent(
+  body: Record<string, unknown>,
+  agentName: string,
+): Promise<{ ok: boolean; txs: { label: string; hash: Hex }[]; state: unknown }> {
+  if (!agentName || typeof agentName !== "string") {
+    throw new Error("agentName is required");
+  }
+
+  if (!ensOwnerWallet || !ensPublicClient) {
+    throw new Error("ENS Sepolia client not configured on the server");
+  }
+  if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
+  const ownerWallet = ensOwnerWallet;
+
+  const txs: { label: string; hash: Hex }[] = [];
+
+  // Resolve the agent's current account from ENS (to sync the devnet registry).
+  const agent = await resolveAgentFromEns(agentName);
+  if (!agent || !agent.account) {
+    throw new Error(`Agent ${agentName} not resolvable on ENSv2`);
+  }
+
+  const budgetProvided =
+    body.budgetEth != null && String(body.budgetEth).trim() !== "";
+  let budget = agent.budget;
+  if (budgetProvided) {
+    budget = parseEther(String(body.budgetEth));
+    if (budget <= 0n) throw new Error("budget must be greater than 0");
+    if (budget > 2n ** 128n - 1n) throw new Error("budget exceeds uint128");
+  }
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const expiresAt = agent.version > 0 ? now + 7n * 86_400n : now + 7n * 86_400n;
+  const newVersion = agent.version + 1n;
+
+  // 1. Update ENS text records on the agent's Permissioned Resolver (Sepolia).
+  const textUpdates: Array<{ key: string; value: string }> = [];
+  if (budgetProvided) textUpdates.push({ key: "axon.budget", value: budget.toString() });
+  if (body.active != null) textUpdates.push({ key: "axon.active", value: Boolean(body.active) ? "true" : "false" });
+  textUpdates.push({ key: "axon.version", value: newVersion.toString() });
+
+  // Allowlist: encode as "target:selector,target:selector"
+  if (body.allowlist && Array.isArray(body.allowlist)) {
+    const entries = (body.allowlist as Array<{ target: string; selector: string }>).filter(
+      (a) => a.target && a.selector && isAddress(a.target),
+    );
+    textUpdates.push({
+      key: "axon.allowlist",
+      value: entries.map((e) => `${e.target}:${e.selector}`).join(","),
+    });
+  }
+
+  for (const { key, value } of textUpdates) {
+    const hash = await ownerWallet.writeContract({
+      chain: sepolia,
+      account: ownerWallet.account!,
+      address: ENS_REGISTRY,
+      abi: ENS_TEXT_ABI,
+      functionName: "setText",
+      args: [agentName, key, value],
+      gas: 1_000_000n,
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    txs.push({ label: `ENS text ${key}=${value} for ${agentName}`, hash });
+  }
+
+  // 2. Sync to axon PermissionRegistry on devnet so validation passes.
+  if (budgetProvided || body.active === true) {
+    const epochLength = 86_400n;
+    const hash = await wallet.writeContract({
+      address: REGISTRY,
+      abi: REGISTRY_ABI,
+      functionName: "grantAgent",
+      args: [agent.account, agent.agentKey ?? zeroAddress, 1, budget, epochLength, expiresAt],
+      gas: 1_000_000n,
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    txs.push({ label: `grantAgent ${agent.account} (${agentName})`, hash });
+  }
+
+  // Allowlist sync on devnet registry.
+  if (body.allowlist && Array.isArray(body.allowlist)) {
+    for (const entry of body.allowlist as Array<{ target: string; selector: string }>) {
+      if (!entry.target || !entry.selector || !isAddress(entry.target)) continue;
+      const hash = await wallet.writeContract({
+        address: REGISTRY,
+        abi: REGISTRY_ABI,
+        functionName: "allow",
+        args: [agent.account, entry.target as Address, entry.selector as Hex],
+        gas: 1_000_000n,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      txs.push({ label: `allow ${entry.selector} -> ${entry.target}`, hash });
+    }
+  }
+
+  // Track the subdomain.
+  const existing = agentSubdomains.get(HUMAN_ENS_NAME ?? agentName) ?? [];
+  if (!existing.includes(agentName)) {
+    agentSubdomains.set(HUMAN_ENS_NAME ?? agentName, [...existing, agentName]);
+  }
+
+  return { ok: true, txs, state: await readState() };
+}
+
 function remember(result: Record<string, unknown>) {
   history.unshift({ ...result, at: new Date().toISOString() });
   history.splice(20);
@@ -902,11 +1196,32 @@ function serveStatic(
     });
 }
 
+const frontendOrigins = new Set(
+  (process.env.AXON_FRONTEND_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
 const server = createServer(async (req, res) => {
   const url = new URL(
     req.url ?? "/",
     `http://${req.headers.host ?? "localhost"}`,
   );
+
+  if (url.pathname.startsWith("/api/")) {
+    const origin = req.headers.origin;
+    res.setHeader("Vary", "Origin");
+    if (origin && frontendOrigins.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      if (req.method === "OPTIONS") {
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.writeHead(204).end();
+        return;
+      }
+    }
+  }
 
   try {
     if (req.method === "GET" && url.pathname === "/api/health") {
@@ -927,6 +1242,25 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/world-id/request") {
+      if (worldIdError) throw new Error(worldIdError);
+      const { sig, nonce, createdAt, expiresAt } = signRequest({
+        signingKeyHex: worldIdSigningKey!,
+      });
+      for (const [pendingNonce, expiry] of worldIdNonces) {
+        if (expiry <= createdAt) worldIdNonces.delete(pendingNonce);
+      }
+      worldIdNonces.set(nonce, expiresAt);
+      json(res, 200, {
+        rp_id: WORLD_ID_RP_ID,
+        nonce,
+        created_at: createdAt,
+        expires_at: expiresAt,
+        signature: sig,
+      });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/state") {
       json(res, 200, await readState());
       return;
@@ -936,11 +1270,29 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const lane = String(body.lane ?? "") as Lane;
       const fnId = String(body.function ?? "") as FunctionId;
+      const agentName = String(body.agentName ?? "");
       if (lane !== "human" && lane !== "agent")
         throw new Error("lane must be human or agent");
       const fn = functionOf(fnId);
       const amountWei =
         fnId === "payAmount" ? parseAmount(body.amountEth) : null;
+
+      let agentContext: { name: string; account: Address; permissions: unknown } | null = null;
+      if (agentName) {
+        const resolved = await resolveAgentFromEns(agentName);
+        if (resolved && resolved.account) {
+          agentContext = {
+            name: resolved.name,
+            account: resolved.account,
+            permissions: {
+              active: resolved.active,
+              budget: resolved.budget.toString(),
+              version: resolved.version.toString(),
+              allowlist: resolved.allowlist,
+            },
+          };
+        }
+      }
 
       const result =
         lane === "human"
@@ -949,7 +1301,7 @@ const server = createServer(async (req, res) => {
       remember(result as Record<string, unknown>);
       json(res, 200, {
         ok: Boolean(result.ok),
-        result,
+        result: { ...result, agent: agentContext },
         state: await readState(),
       });
       return;
@@ -957,8 +1309,164 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/permission") {
       const body = await readBody(req);
-      const result = await updatePermission(body);
+      const verification = await verifyWorldIdProof(body.worldIdProof);
+      if (!verification.valid) {
+        throw new Error(`World ID verification required: ${verification.reason ?? "invalid proof"}`);
+      }
+      const agentName = String(body.agentName ?? "");
+      let result;
+      if (agentName) {
+        result = await updatePermissionForAgent(body, agentName);
+      } else {
+        result = await updatePermission(body);
+      }
       json(res, 200, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/ens/resolve") {
+      const name = url.searchParams.get("name");
+      if (!name) throw new Error("name query parameter is required");
+      const resolved = await resolveAgentFromEns(name);
+      if (!resolved) {
+        json(res, 404, { ok: false, error: `ENS name ${name} not resolvable or has no axon records` });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        name: resolved.name,
+        account: resolved.account,
+        agentKey: resolved.agentKey,
+        active: resolved.active,
+        budget: resolved.budget.toString(),
+        version: resolved.version.toString(),
+        allowlist: resolved.allowlist,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/ens/agents") {
+      const name = url.searchParams.get("name") ?? HUMAN_ENS_NAME;
+      if (!name) throw new Error("name query parameter is required (or set HUMAN_ENS_NAME)");
+      const subs = agentSubdomains.get(name) ?? [];
+      const resolved = await Promise.all(
+        subs.map(async (sub) => {
+          const agent = await resolveAgentFromEns(sub);
+          return {
+            name: sub,
+            ...(agent
+              ? {
+                  account: agent.account,
+                  agentKey: agent.agentKey,
+                  active: agent.active,
+                  budget: agent.budget.toString(),
+                  version: agent.version.toString(),
+                  allowlist: agent.allowlist,
+                }
+              : { unresolved: true }),
+          };
+        }),
+      );
+      json(res, 200, { ok: true, parent: name, agents: resolved });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/ens/register") {
+      const body = await readBody(req);
+      const { subdomain, budgetEth } = body as {
+        subdomain?: string;
+        budgetEth?: string;
+      };
+      if (!subdomain || !budgetEth)
+        throw new Error("subdomain and budgetEth are required");
+      if (!ensOwnerWallet || !ensPublicClient)
+        throw new Error("ENS Sepolia client not configured");
+
+      // Default agent account and key from deployment config.
+      const agentAccount = ACCOUNT;
+      const agentKey = privateKeyToAccount(AGENT_PK).address;
+
+      if (!ENS_REGISTRY) throw new Error("ENS_REGISTRY must be a 20-byte contract address");
+      const ownerWallet = ensOwnerWallet;
+
+      // World ID gate for creating a new agent namespace.
+      const proof = body.worldIdProof;
+      const verification = await verifyWorldIdProof(proof);
+      if (!verification.valid) {
+        throw new Error(`World ID verification required: ${verification.reason ?? "invalid proof"}`);
+      }
+
+      const parent = HUMAN_ENS_NAME ?? subdomain.split(".").slice(-2).join(".");
+      const fullName = normalize(`${subdomain}.${parent}`);
+      const budget = parseEther(String(budgetEth));
+      if (budget <= 0n) throw new Error("budget must be greater than 0");
+
+      const textRecords = [
+        { key: "axon.account", value: agentAccount },
+        { key: "axon.agentKey", value: agentKey },
+        { key: "axon.active", value: "true" },
+        { key: "axon.budget", value: budget.toString() },
+        { key: "axon.version", value: "1" },
+        { key: "axon.allowlist", value: "" },
+      ];
+
+      if (activeEnsRegistrations.has(fullName))
+        throw new Error(`Registration for ${fullName} is already running.`);
+      activeEnsRegistrations.add(fullName);
+      const txs: { label: string; hash: Hex }[] = [];
+      try {
+        for (const { key, value } of textRecords) {
+          const recordId = `${fullName}:${key}`;
+          let pending = pendingEnsRegistrationWrites.get(recordId);
+          if (!pending) {
+            if (await readEnsTextRecord(fullName, key) === value) continue;
+            const { request } = await ensPublicClient.simulateContract({
+              account: ownerWallet.account!,
+              address: ENS_REGISTRY,
+              abi: ENS_TEXT_ABI,
+              functionName: "setText",
+              args: [fullName, key, value],
+            }).catch((error) => {
+              throw new Error(`ENS simulation failed for ${key}: ${message(error)}`);
+            });
+            const hash = await ownerWallet.writeContract({
+              ...request,
+              chain: sepolia,
+              gas: 1_000_000n,
+            });
+            pending = { hash, value };
+            pendingEnsRegistrationWrites.set(recordId, pending);
+          }
+          const { hash } = pending;
+          const receipt = await ensPublicClient.waitForTransactionReceipt({
+            hash,
+            timeout: 0, // Keep polling while the Sepolia transaction is pending.
+          }).catch((error) => {
+            throw new Error(`Could not confirm ENS text update for ${key} (${hash}): ${message(error)}`);
+          });
+          pendingEnsRegistrationWrites.delete(recordId);
+          if (receipt.status !== "success") throw new Error(`ENS text update failed for ${key}: ${hash}`);
+          if (pending.value !== value)
+            throw new Error(`An earlier write for ${key} has now confirmed. Retry to apply the new value.`);
+          txs.push({ label: `ENS text ${key} for ${fullName}`, hash });
+        }
+      } finally {
+        activeEnsRegistrations.delete(fullName);
+      }
+
+      const existing = agentSubdomains.get(parent) ?? [];
+      if (!existing.includes(fullName)) {
+        agentSubdomains.set(parent, [...existing, fullName]);
+      }
+
+      const lastWrite = txs.at(-1);
+      if (lastWrite) agentRegistrationHashes.set(fullName, lastWrite.hash);
+
+      json(res, 200, {
+        ok: true,
+        agent: fullName,
+        txs,
+      });
       return;
     }
 
