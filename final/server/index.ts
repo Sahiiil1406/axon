@@ -1274,7 +1274,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: Boolean(result.ok),
         result: recorded,
-        state: await readState(),
+        ...(body.includeState === false ? {} : { state: await readState() }),
       });
       return;
     }

@@ -75,3 +75,15 @@ To choose different local ports:
 ```sh
 FINAL_PORT=8902 FRONTEND_PORT=5175 ./start.sh
 ```
+
+## Run the demo with Codex
+
+Set the agent’s budget and allowed functions in the Axon Permissions page.
+Then use the [axon-transactions skill](.agents/skills/axon-transactions/SKILL.md)
+in Codex and ask it to increment FinalCounter or pay an exact ETH amount.
+When no agent name is given, the skill uses the configured default devnet account.
+
+The skill runs the SDK directly against chain 1337. For named agents, it reads the name
+binding from Sepolia and uses the local agent signer. The web server is only
+needed to manage permissions. Add `--simulate` to the command for a preview
+that does not submit a transaction.
