@@ -47,11 +47,11 @@ function RevokeDialog({
       <div className="console-dialog-icon">
         <ShieldOff size={25} />
       </div>
-      <p className="console-eyebrow">LIVE PERMISSION REGISTRY</p>
+      <p className="console-eyebrow">Live permission registry</p>
       <h2 id="revoke-title">Revoke {targetLabel}?</h2>
       <p>
-        Deactivating this grant sets its authority to inactive. Agent calls
-        will be rejected until you save a new grant.
+        Deactivating this grant sets its authority to inactive. Agent calls will
+        be rejected until you save a new grant.
       </p>
       <div>
         <Button variant="outline" onClick={onClose}>
@@ -124,7 +124,13 @@ export function PermissionsPage() {
     setInvalid(message)
     if (message) return
 
-    if (await permission({ budgetEth: budget.trim(), allow, agentName: selectedAgent ?? undefined })) {
+    if (
+      await permission({
+        budgetEth: budget.trim(),
+        allow,
+        agentName: selectedAgent ?? undefined,
+      })
+    ) {
       setDirty(false)
     }
   }
@@ -171,10 +177,7 @@ export function PermissionsPage() {
                 <code title={grant.grantHash}>
                   {short(grant.grantHash, 10, 8)}
                 </code>
-                <CopyButton
-                  value={grant.grantHash}
-                  label="Copy grant hash"
-                />
+                <CopyButton value={grant.grantHash} label="Copy grant hash" />
               </span>
             ) : (
               "—"
@@ -196,7 +199,7 @@ export function PermissionsPage() {
   return (
     <>
       <PageHeading
-        eyebrow="PERMISSIONREGISTRY / OWNER CONTROLS"
+        eyebrow="PermissionRegistry / owner controls"
         title="Define the agent's authority."
         actions={
           <RefreshButton label="Reload grant" onClick={() => void reload()} />
@@ -209,14 +212,16 @@ export function PermissionsPage() {
       </PageHeading>
 
       {/* Agent selector */}
-      <Panel eyebrow="00 / SELECT AGENT" title="Choose authority target">
+      <Panel eyebrow="00 / Select agent" title="Choose authority target">
         <div className="console-agent-selector">
           <label htmlFor="agent-selector">Authority target</label>
           <select
             id="agent-selector"
             value={selectedAgent ?? "default"}
             onChange={(e) => {
-              setSelectedAgent(e.target.value === "default" ? null : e.target.value)
+              setSelectedAgent(
+                e.target.value === "default" ? null : e.target.value
+              )
               setDirty(false)
             }}
             disabled={disabled}
@@ -234,7 +239,7 @@ export function PermissionsPage() {
               size="sm"
               onClick={() => setSelectedAgent(null)}
             >
-            Use default
+              Use default
             </Button>
           )}
           {ens.agents.length === 0 && !state?.ens?.humanName && (
@@ -364,6 +369,7 @@ export function PermissionsPage() {
                       [fn.id]: e.target.checked,
                     }))
                     setDirty(true)
+                    setInvalid(null)
                   }}
                 />
               </label>
@@ -373,11 +379,46 @@ export function PermissionsPage() {
                 ENS allowlist: {selectedAgentInfo.allowlist.map((e) => `${e.selector} → ${e.target}`).join(", ")}
               </p>
             )}
-            {!state && (
-              <p className="console-help">
-                Connect to the API to load the current allowlist.
-              </p>
-            )}
+            <fieldset className="console-selectors" disabled={agentDisabled}>
+              <legend>Allowlisted selectors</legend>
+              {state?.functions.map((fn) => (
+                <label key={fn.id}>
+                  <div>
+                    <strong>{fn.signature}</strong>
+                    <small>
+                      {fn.selector} · {fn.note}
+                    </small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    aria-label={`Allow ${fn.signature}`}
+                    checked={!!allow[fn.id]}
+                    onChange={(e) => {
+                      setAllow((prev) => ({
+                        ...prev,
+                        [fn.id]: e.target.checked,
+                      }))
+                      setDirty(true)
+                    }}
+                  />
+                </label>
+              ))}
+              {selectedAgent &&
+                selectedAgentInfo &&
+                selectedAgentInfo.allowlist.length > 0 && (
+                  <p className="console-help">
+                    ENS allowlist:{" "}
+                    {selectedAgentInfo.allowlist
+                      .map((e) => `${e.selector} → ${e.target}`)
+                      .join(", ")}
+                  </p>
+                )}
+              {!state && (
+                <p className="console-help">
+                  Connect to the API to load the current allowlist.
+                </p>
+              )}
+            </fieldset>
           </fieldset>
           {selectedAgentInfo?.account && state?.contracts.agentAccount.toLowerCase() === selectedAgentInfo.account.toLowerCase() && (
             <p className="console-help">
@@ -439,7 +480,7 @@ export function PermissionsPage() {
       </Panel>
 
       <Panel
-        eyebrow="03 / DEMO WORKFLOW"
+        eyebrow="03 / Demo workflow"
         title="Put the permission boundary to work"
       >
         <div className="console-walkthrough">
@@ -447,9 +488,8 @@ export function PermissionsPage() {
             <span>01</span>
             <h3>Compare the two callers</h3>
             <p>
-              Run increment() through humanCall and agentCall. The same
-              contract advances the human counter by 1 and the agent counter by
-              10.
+              Run increment() through humanCall and agentCall. The same contract
+              advances the human counter by 1 and the agent counter by 10.
             </p>
             <ConsoleLink className="console-text-link" href="/app">
               Open call console <ArrowRight size={13} />
@@ -460,8 +500,8 @@ export function PermissionsPage() {
             <h3>Exercise the epoch budget</h3>
             <p>
               Set a budget below your intended spend, then submit
-              payAmount(uint256) as the agent. Inspect E_EPOCH_BUDGET, raise
-              the budget, and run the same call again.
+              payAmount(uint256) as the agent. Inspect E_EPOCH_BUDGET, raise the
+              budget, and run the same call again.
             </p>
             <ConsoleLink className="console-text-link" href="/app/activity">
               Inspect the outcomes <ArrowRight size={13} />
@@ -484,9 +524,9 @@ export function PermissionsPage() {
               <span>04</span>
               <h3>Manage ENS agents</h3>
               <p>
-                Create agent subdomains under {ens.humanName}, each with its
-                own Permissioned Resolver. World ID verification gates
-                authority changes.
+                Create agent subdomains under {ens.humanName}, each with its own
+                Permissioned Resolver. World ID verification gates authority
+                changes.
               </p>
               <ConsoleLink className="console-text-link" href="/app/agents">
                 Open agent manager <ArrowRight size={13} />
@@ -498,7 +538,7 @@ export function PermissionsPage() {
 
       <div className="console-permission-results">
         <Panel
-          eyebrow="04 / OWNER TRANSACTIONS"
+          eyebrow="04 / Owner transactions"
           title="Permission updates"
           action={<Badge>{ownerTransactions.length} transactions</Badge>}
         >
@@ -522,7 +562,7 @@ export function PermissionsPage() {
           )}
         </Panel>
         <Panel
-          eyebrow="05 / RESULTING STATE"
+          eyebrow="05 / Resulting state"
           title="Authority after the update"
         >
           <div className="console-grant-details">
@@ -561,7 +601,10 @@ export function PermissionsPage() {
         onClose={() => setRevokeOpen(false)}
         onConfirm={() => {
           setRevokeOpen(false)
-          void permission({ active: false, agentName: selectedAgent ?? undefined })
+          void permission({
+            active: false,
+            agentName: selectedAgent ?? undefined,
+          })
         }}
         targetLabel={revokeTarget || "the agent grant"}
       />

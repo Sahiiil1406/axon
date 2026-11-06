@@ -1,3 +1,4 @@
+import { WorkspaceHeader } from "@/components/workspace-header"
 import {
   Link,
   Navigate,
@@ -36,20 +37,22 @@ function ScrollOnNavigation() {
 }
 
 function SiteLayout() {
+  const { pathname } = useLocation()
+  const docs = pathname.replace(/\/$/, "") === "/docs"
   return (
     <>
       <a href="#main" className="sr-only focus:not-sr-only">
         Skip to content
       </a>
-      <div className="page-rails" aria-hidden="true">
+      {!docs && <div className="page-rails" aria-hidden="true">
         <div />
         <div />
-      </div>
-      <AxonHeader />
+      </div>}
+      {docs ? <WorkspaceHeader page="Documentation" rootHref="/" /> : <AxonHeader />}
       <main id="main">
         <Outlet />
       </main>
-      <AxonFooter />
+      {pathname === "/" && <AxonFooter />}
     </>
   )
 }

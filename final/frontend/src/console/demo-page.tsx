@@ -30,13 +30,7 @@ import {
   short,
 } from "./format"
 import { HistoryTable, Receipt } from "./transactions"
-import type {
-  AgentInfo,
-  CallResult,
-  CallRestrictions,
-  FunctionId,
-  Lane,
-} from "./types"
+import type { CallResult, FunctionId, Lane } from "./types"
 
 function LaneCard({
   lane,
@@ -150,10 +144,7 @@ export function DemoPage() {
         setValidation(`${fn.signature} is not allowed for agent calls.`)
         return
       }
-      if (
-        callRestrictions.maxSpendPerCall != null &&
-        fn.needsAmount
-      ) {
+      if (callRestrictions.maxSpendPerCall != null && fn.needsAmount) {
         const amountWei = BigInt(amount.trim()) * 10n ** 18n
         if (amountWei > callRestrictions.maxSpendPerCall) {
           setValidation(
@@ -167,7 +158,12 @@ export function DemoPage() {
     const invalid = fn.needsAmount ? validateAmount(amount) : null
     setValidation(invalid)
     if (invalid) return
-    await call(lane, fn.id, fn.needsAmount ? amount.trim() : null, agentName || undefined)
+    await call(
+      lane,
+      fn.id,
+      fn.needsAmount ? amount.trim() : null,
+      agentName || undefined
+    )
   }
   const same =
     last.human && last.agent && last.human.function === last.agent.function
@@ -176,7 +172,7 @@ export function DemoPage() {
   return (
     <>
       <PageHeading
-        eyebrow="FINALCOUNTER / TRANSACTION CONSOLE"
+        eyebrow="FinalCounter / Transaction console"
         title="Same call. Different authority."
         actions={
           <ConsoleLink className="console-outline-link" href="/app/permissions">
@@ -232,7 +228,7 @@ export function DemoPage() {
         </div>
       )}
       <Panel
-        eyebrow="00 / CALL RESTRICTIONS"
+        eyebrow="00 / Call restrictions"
         title="Agent call rules"
         action={
           <Badge tone={callRestrictions.agentEnabled ? "good" : "bad"}>
@@ -265,9 +261,7 @@ export function DemoPage() {
                       [f.id]: e.target.checked,
                     })
                   }
-                  disabled={
-                    disabled || !callRestrictions.agentEnabled
-                  }
+                  disabled={disabled || !callRestrictions.agentEnabled}
                 />
                 <span>{f.signature}</span>
               </label>
@@ -339,7 +333,7 @@ export function DemoPage() {
       </dl>
       <div className="console-demo-grid">
         <Panel
-          eyebrow="01 / EXECUTE"
+          eyebrow="01 / Execute"
           title="Build a call"
           action={
             <Badge tone={busy ? "warn" : "muted"}>
@@ -481,7 +475,7 @@ export function DemoPage() {
           </form>
         </Panel>
         <Panel
-          eyebrow="02 / COMPARE"
+          eyebrow="02 / Compare"
           title="What the chain saw"
           action={
             <Badge tone={last.human && last.agent ? "good" : "muted"}>
@@ -517,7 +511,7 @@ export function DemoPage() {
         </Panel>
       </div>
       <Panel
-        eyebrow="03 / INSPECT"
+        eyebrow="03 / Inspect"
         title="Latest receipt"
         action={
           latest && (
@@ -540,7 +534,7 @@ export function DemoPage() {
         )}
       </Panel>
       <Panel
-        eyebrow="04 / ACTIVITY"
+        eyebrow="04 / Activity"
         title="Recent calls"
         action={
           <ConsoleLink className="console-text-link" href="/app/activity">

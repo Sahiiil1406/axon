@@ -1,0 +1,275 @@
+.workspace-sidebar {
+  position: sticky;
+  top: var(--sidebar-top, 16px);
+  align-self: start;
+  height: calc(100dvh - var(--sidebar-top, 16px) - 16px);
+  padding: 32px 0px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--background);
+}
+.workspace-sidebar-label {
+  margin: 0;
+  padding-inline: 14px;
+  font: 10px/1.5 var(--font-sans);
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+  text-transform: none;
+}
+.workspace-sidebar nav {
+  display: grid;
+  gap: 6px;
+}
+.workspace-sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 14px;
+  min-height: 48px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  border: 1px solid transparent;
+  transition:
+    color 160ms,
+    background-color 160ms,
+    border-color 160ms;
+}
+.workspace-sidebar nav a > svg {
+  flex-shrink: 0;
+}
+.workspace-sidebar nav a:hover {
+  color: var(--foreground);
+  background: var(--card);
+  border-color: var(--border);
+}
+.workspace-sidebar nav a.active {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  box-shadow: inset 2px 0 var(--primary);
+}
+.workspace-sidebar nav a.active > svg {
+  color: var(--primary);
+}
+.workspace-sidebar a:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 2px;
+}
+.workspace-sidebar-badge {
+  margin-left: auto;
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  font: 9px var(--font-sans);
+}
+.workspace-sidebar-resources {
+  margin-top: auto;
+  padding: 24px 14px 0;
+  border-top: 1px solid var(--border);
+}
+.workspace-sidebar-resources .workspace-sidebar-label {
+  padding: 0;
+  margin-bottom: 18px;
+}
+.workspace-sidebar-resources > a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.workspace-sidebar-resources > a:hover {
+  color: var(--primary);
+}
+.docs-workspace {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+}
+.docs-workspace > article {
+  padding: 56px clamp(28px, 4vw, 72px);
+  width: 100%;
+  max-width: 1100px;
+  min-width: 0;
+  margin-inline: auto;
+}
+.docs-workspace .ds-section {
+  scroll-margin-top: 32px;
+}
+.console-sidebar.workspace-sidebar {
+  --sidebar-top: 76px;
+  height: calc(100dvh - 76px);
+}
+@media (max-width: 1200px) {
+  .docs-workspace {
+    grid-template-columns: 228px minmax(0, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  .workspace-sidebar,
+  .console-sidebar.workspace-sidebar {
+    position: relative;
+    top: auto;
+    height: auto;
+    padding: 16px;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .workspace-sidebar nav {
+    display: flex;
+    overflow-x: auto;
+    padding-block: 3px;
+    scrollbar-width: thin;
+  }
+  .workspace-sidebar nav a {
+    flex-shrink: 0;
+    min-height: 42px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  .workspace-sidebar-resources {
+    display: none;
+  }
+  .docs-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .docs-workspace > article {
+    padding: 36px 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar nav a {
+    transition: none;
+  }
+}
+
+.docs-workspace > .workspace-sidebar {
+  --sidebar-top: 76px;
+  height: calc(100dvh - 76px);
+}
+.docs-workspace > article {
+  width: min(880px, calc(100% - 96px));
+  max-width: 880px;
+  padding: 64px 0;
+  margin-inline: auto;
+  text-align: left;
+}
+.docs-workspace .display {
+  font-size: clamp(36px, 4vw, 58px);
+}
+.docs-workspace .ds-section {
+  scroll-margin-top: 104px;
+}
+@media (max-width: 800px) {
+  .docs-workspace > .workspace-sidebar {
+    height: auto;
+  }
+  .docs-workspace > article {
+    width: calc(100% - 48px);
+    padding-block: 36px;
+  }
+}
+
+.sidebar-shark {
+  margin: 0 0 0;
+  padding: 0;
+  color: var(--axon-cyan);
+  opacity: 1;
+}
+.sidebar-shark pre {
+  margin: 0;
+  white-space: pre;
+  font:
+    10px/1.3 ui-monospace,
+    Menlo,
+    monospace;
+  letter-spacing: 0;
+}
+
+.sidebar-shark {
+  opacity: 0.85;
+}
+.sidebar-shark .sidebar-shark-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 2;
+  filter: grayscale(1) sepia(1) saturate(4) hue-rotate(125deg);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.sidebar-shark {
+  padding-block: 14px;
+  overflow: visible;
+  background: transparent;
+}
+.sidebar-shark .sidebar-shark-canvas {
+  width: 100%;
+  margin-inline: auto;
+  background: transparent;
+  transform: rotate(-38deg);
+  transform-origin: center;
+}
+
+/* Oversized still enters from the right; its tail can crop at the sidebar edge. */
+.workspace-sidebar-resources {
+  position: relative;
+}
+.workspace-sidebar-resources .sidebar-shark {
+  position: absolute;
+  right: -2px;
+  bottom: calc(100%);
+  width: calc(100% + 4px);
+  height: 160px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sidebar-shark .sidebar-shark-canvas {
+  position: absolute;
+  right: -125px;
+  top: -8px;
+  width: 360px;
+  max-width: none;
+  height: 180px;
+  margin: 0;
+  transform: rotate(-38deg) scaleX(-1);
+  transform-origin: center;
+}
+
+/* Keep console routes on the same sidebar spacing as Documentation. */
+.workspace-sidebar.console-sidebar {
+  padding: 32px 0;
+}
+.workspace-sidebar.console-sidebar nav {
+  gap: 6px;
+}
+.workspace-sidebar.console-sidebar nav a {
+  padding: 13px 14px;
+  min-height: 48px;
+  gap: 13px;
+  font-size: 12px;
+}
+@media (max-width: 800px) {
+  .workspace-sidebar.console-sidebar {
+    padding: 16px;
+  }
+  .workspace-sidebar.console-sidebar nav {
+    justify-content: initial;
+  }
+  .workspace-sidebar.console-sidebar nav a {
+    min-height: 42px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+}

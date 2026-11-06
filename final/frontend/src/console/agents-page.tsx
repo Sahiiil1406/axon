@@ -13,10 +13,15 @@ export function AgentsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
   const [createdAgent, setCreatedAgent] = useState<string>()
-  const [registrations, setRegistrations] = useState<Record<string, string | undefined>>({})
+  const [registrations, setRegistrations] = useState<
+    Record<string, string | undefined>
+  >({})
   const registrationParent = ens.humanName ?? state?.ens?.humanName
   const registeredAgents = new Map(
-    [...(state?.ens?.agents ?? []), ...ens.agents].map((agent) => [agent.name, agent])
+    [...(state?.ens?.agents ?? []), ...ens.agents].map((agent) => [
+      agent.name,
+      agent,
+    ])
   )
   const agentNames = [...new Set([...registeredAgents.keys(), ...Object.keys(registrations)])]
   const agentsByParent = new Map<string, string[]>()
@@ -29,7 +34,8 @@ export function AgentsPage() {
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (submitting || !registrationParent || worldIdStatus !== "verified") return
+    if (submitting || !registrationParent || worldIdStatus !== "verified")
+      return
 
     setSubmitting(true)
     setError(undefined)
@@ -43,11 +49,16 @@ export function AgentsPage() {
         worldIdProof: takeWorldIdProof(),
       })
       setCreatedAgent(result.agent)
-      setRegistrations((previous) => ({ ...previous, [result.agent]: result.txs.at(-1)?.hash ?? previous[result.agent] }))
+      setRegistrations((previous) => ({
+        ...previous,
+        [result.agent]: result.txs.at(-1)?.hash ?? previous[result.agent],
+      }))
       setSubdomain("")
       await refreshEns()
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to create agent.")
+      setError(
+        error instanceof Error ? error.message : "Failed to create agent."
+      )
     } finally {
       setSubmitting(false)
     }
@@ -60,9 +71,13 @@ export function AgentsPage() {
       </PageHeading>
 
       <Panel
-        eyebrow="01 / ENS NAMESPACE"
+        eyebrow="01 / ENS namespace"
         title="Agent tree"
-        action={<Badge tone="muted">{agentNames.length} {agentNames.length === 1 ? "agent" : "agents"}</Badge>}
+        action={
+          <Badge tone="muted">
+            {agentNames.length} {agentNames.length === 1 ? "agent" : "agents"}
+          </Badge>
+        }
       >
         {!agentNames.length && <p className="console-help">No registered agents yet.</p>}
         <ul className="console-agent-tree">
@@ -82,7 +97,10 @@ export function AgentsPage() {
                       <li key={name}>
                         <details className="console-agent-file">
                           <summary>
-                            <ChevronRight size={13} className="console-agent-chevron" />
+                            <ChevronRight
+                              size={13}
+                              className="console-agent-chevron"
+                            />
                             <File size={15} />
                             <span className="console-agent-name">{name}</span>
                             <a
@@ -101,9 +119,20 @@ export function AgentsPage() {
                             <CopyButton value={name} label="Copy name" />
                             <DefinitionList
                               rows={[
-                                ["Account", <ChainLink value={agent?.account} />],
-                                ["Agent key", <ChainLink value={agent?.agentKey} />],
-                                ["Budget", agent?.budget != null ? `${eth(agent.budget)} ETH per epoch` : "—"],
+                                [
+                                  "Account",
+                                  <ChainLink value={agent?.account} />,
+                                ],
+                                [
+                                  "Agent key",
+                                  <ChainLink value={agent?.agentKey} />,
+                                ],
+                                [
+                                  "Budget",
+                                  agent?.budget != null
+                                    ? `${eth(agent.budget)} ETH per epoch`
+                                    : "—",
+                                ],
                               ]}
                             />
                           </div>
@@ -117,7 +146,7 @@ export function AgentsPage() {
           ))}
         </ul>
       </Panel>
-      <Panel eyebrow="02 / CREATE AGENT" title="Register a new agent subdomain">
+      <Panel eyebrow="02 / Create agent" title="Register a new agent subdomain">
         <form className="console-form" onSubmit={handleCreate}>
           <label htmlFor="create-name">
             Agent subdomain
@@ -130,9 +159,13 @@ export function AgentsPage() {
             />
           </label>
           {registrationParent ? (
-            <p className="console-muted">Registers under {registrationParent}.</p>
+            <p className="console-muted">
+              Registers under {registrationParent}.
+            </p>
           ) : (
-            <p className="console-help">Registration requires a parent ENS name on the server.</p>
+            <p className="console-help">
+              Registration requires a parent ENS name on the server.
+            </p>
           )}
           <label htmlFor="create-budget">
             Budget per epoch (ETH)
@@ -148,10 +181,16 @@ export function AgentsPage() {
             <Button
               type="button"
               variant="outline"
-              disabled={!registrationParent || submitting || worldIdStatus === "verifying"}
+              disabled={
+                !registrationParent ||
+                submitting ||
+                worldIdStatus === "verifying"
+              }
               onClick={() => void verifyWorldId()}
             >
-              {worldIdStatus === "verifying" ? "Verifying…" : "Verify with World ID"}
+              {worldIdStatus === "verifying"
+                ? "Verifying…"
+                : "Verify with World ID"}
             </Button>
             {state?.worldIdTestSkip && worldIdStatus !== "verified" && (
               <Button type="button" variant="outline" onClick={skipWorldId}
@@ -161,11 +200,21 @@ export function AgentsPage() {
             )}
             {worldIdStatus === "verified" && <Badge tone="good">{worldIdSkipped ? "Skipped for testing" : "Proof ready"}</Badge>}
           </div>
-          {error && <p className="console-inline-error" role="alert">{error}</p>}
+          {error && (
+            <p className="console-inline-error" role="alert">
+              {error}
+            </p>
+          )}
           {createdAgent && <p role="status">Registered {createdAgent}.</p>}
           <Button
             type="submit"
-            disabled={!registrationParent || submitting || !subdomain.trim() || !budgetEth.trim() || worldIdStatus !== "verified"}
+            disabled={
+              !registrationParent ||
+              submitting ||
+              !subdomain.trim() ||
+              !budgetEth.trim() ||
+              worldIdStatus !== "verified"
+            }
           >
             <UserPlus size={14} />
             {submitting ? "Creating…" : "Create agent"}

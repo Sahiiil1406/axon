@@ -1,30 +1,47 @@
-import { SiteLink } from "@/components/site-link"
-import { ArrowRight, KeyRound, Network, ShieldCheck } from "lucide-react"
+import { WorkspaceSidebar } from "@/components/workspace-sidebar"
+import { useLocation } from "react-router-dom"
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Fingerprint,
+  KeyRound,
+  Layers3,
+  Network,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react"
 import { ActionLink } from "@/components/brand/primitives"
 import { ReferenceFrame } from "@/components/brand/reference-frame"
 export function Docs() {
+  const { hash } = useLocation()
+  const active = hash || "#architecture"
   return (
-    <div className="container-shell ds-layout axon-docs">
-      <aside className="ds-nav">
-        <span className="eyebrow">AXON / TECHNICAL OVERVIEW</span>
-        {[
-          ["Architecture", "architecture"],
-          ["Permission grants", "grants"],
-          ["Scope & intent", "scope"],
-          ["Protocol rules", "protocol"],
-          ["Revocation", "revocation"],
-        ].map(([label, id]) => (
-          <SiteLink key={id} href={`#${id}`}>
-            {label}
-          </SiteLink>
-        ))}
-        <SiteLink className="text-primary" href="/#playground">
-          Try the policy playground ↗
-        </SiteLink>
-      </aside>
+    <div className="docs-workspace axon-docs">
+      <WorkspaceSidebar
+        label="Documentation"
+        items={[
+          { label: "Architecture", href: "/docs#architecture", icon: Layers3 },
+          { label: "Permission grants", href: "/docs#grants", icon: KeyRound },
+          { label: "Scope & intent", href: "/docs#scope", icon: Fingerprint },
+          {
+            label: "Protocol rules",
+            href: "/docs#protocol",
+            icon: ShieldCheck,
+          },
+          { label: "Revocation", href: "/docs#revocation", icon: ShieldX },
+        ].map((item) => ({ ...item, active: item.href.endsWith(active) }))}
+        resources={[
+          { label: "Live console", href: "/app", icon: ArrowUpRight },
+          {
+            label: "Policy playground",
+            href: "/#playground",
+            icon: ArrowUpRight,
+          },
+        ]}
+      />
       <article>
         <section id="architecture" className="ds-section pt-0">
-          <span className="eyebrow">EIP-8141 DEVNET PROTOTYPE</span>
+          <span className="eyebrow">EIP-8141 devnet prototype</span>
           <h1 className="display mt-5">Authority before execution.</h1>
           <p className="body-copy mt-7">
             Axon explores an agent-native permission layer for Ethereum. An

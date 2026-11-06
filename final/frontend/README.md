@@ -51,3 +51,10 @@ The fixture is never imported by the application or used as a live API fallback.
 `src/components/ascii-sharks` contains the reusable `AsciiSharks` component,
 its canvas engine, types, usage notes, and MIT license. The landing-page hero
 uses it as a full-width background. See its [README](./src/components/ascii-sharks/README.md).
+
+## Landing shader accents
+
+`LandingShader` wraps Paper’s `StaticRadialGradient` and `Dithering` with the
+provided cyan settings. The closing section uses the radial gradient; the live
+authority comparison uses the dithered sphere. Shaders load in a separate chunk,
+mount near the viewport, and freeze dithering off-screen or for reduced motion.
