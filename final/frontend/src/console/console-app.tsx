@@ -1,3 +1,4 @@
+import { WorkspaceFish } from "@/components/workspace-fish"
 import { WorkspaceSidebar } from "@/components/workspace-sidebar"
 import { Outlet, useLocation } from "react-router-dom"
 import {
@@ -366,6 +367,7 @@ export default function ConsoleApp() {
           }
         />
         <div className="console-layout">
+          <WorkspaceFish page={path}/>
           <WorkspaceSidebar
             label="Workspace"
             className="console-sidebar"
@@ -380,17 +382,8 @@ export default function ConsoleApp() {
                   ? state.history.length
                   : undefined,
             }))}
-            resources={[
-              {
-                label: "Devnet explorer",
-                href: "https://altmempoolexplorer.forshtat.com",
-                icon: ArrowUpRight,
-              },
-              { label: "Protocol overview", href: "/docs", icon: FileText },
-            ]}
-          />
-          <main id="console-main" className="console-main">
-            <div className="console-breadcrumb">
+            bottom={
+            <div className="console-sidebar-status">
               <span className="console-status-inline">
                 <span
                   className={`console-connection-dot ${error ? "offline" : loading ? "loading" : ""}`}
@@ -421,6 +414,17 @@ export default function ConsoleApp() {
               </span>
               <RefreshButton />
             </div>
+            }
+            resources={[
+              {
+                label: "Devnet explorer",
+                href: "https://altmempoolexplorer.forshtat.com",
+                icon: ArrowUpRight,
+              },
+              { label: "Protocol overview", href: "/docs", icon: FileText },
+            ]}
+          />
+          <main id="console-main" className="console-main">
             {error && (
               <div className="console-banner bad" role="alert">
                 <Blocks size={18} />

@@ -68,7 +68,10 @@ export function AgentsPage() {
         Browse registered agents under their ENS names.
       </PageHeading>
 
+      <div className="console-agents-inline console-accent-pair">
       <Panel
+        className="console-panel-cyan"
+        icon={<Folder size={22}/>}
         eyebrow="01 / ENS namespace"
         title="Agent tree"
         action={
@@ -144,7 +147,7 @@ export function AgentsPage() {
           ))}
         </ul>
       </Panel>
-      <Panel eyebrow="02 / Create agent" title="Register a new agent subdomain">
+      <Panel className="console-panel-green" icon={<UserPlus size={22}/>} eyebrow="02 / Create agent" title="Register a new agent subdomain">
         <form className="console-form" onSubmit={handleCreate}>
           <label htmlFor="create-name">
             Agent subdomain
@@ -212,6 +215,7 @@ export function AgentsPage() {
           </Button>
         </form>
       </Panel>
+      </div>
     </>
   )
 }

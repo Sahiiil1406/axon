@@ -1,3 +1,4 @@
+import { sdkPages } from "@/components/sdk-documentation"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SiteLink } from "@/components/site-link"
 import {
@@ -14,40 +15,23 @@ import { ActionLink, Logo } from "./primitives"
 
 const groups = {
   Protocol: [
-    {
-      label: "Architecture",
-      href: "/#architecture",
-      detail: "From delegated intent to guarded execution",
-    },
-    {
-      label: "Permission layer",
-      href: "/#permissions",
-      detail: "Budgets, scopes, and live revocation",
-    },
-    {
-      label: "Alt mempool",
-      href: "/#alt-mempool",
-      detail: "Validation built for live authority",
-    },
+    {category:"Architecture",label:"Architecture",href:"/docs/architecture",detail:"From delegated intent to guarded execution"},
+    {category:"Permission layer",label:"Permission layer",href:"/docs/permission-layer",detail:"How delegated authority works"},
+    {category:"Permission layer",label:"Permission grants",href:"/docs/grants",detail:"Signer, budget, epoch and expiry"},
+    {category:"Permission layer",label:"Scope & intent",href:"/docs/scope",detail:"Targets, selectors and bounded actions"},
+    {category:"Permission layer",label:"Guardrails",href:"/docs/guardrails",detail:"Budget, scope and revocation explained"},
+    {category:"Permission layer",label:"Live revocation",href:"/docs/revocation",detail:"Current registry state governs authority"},
+    {category:"Execution",label:"Alt mempool",href:"/docs/alt-mempool",detail:"Admission built for live authority"},
+    {category:"Execution",label:"Protocol rules",href:"/docs/protocol",detail:"Contract-owned action boundaries"},
   ],
-  Developers: [
-    {
-      label: "Technical overview",
-      href: "/docs",
-      detail: "Explore the account and registry model",
-    },
-    {
-      label: "Policy playground",
-      href: "/#playground",
-      detail: "See a permission check in action",
-    },
-    {
-      label: "Design system",
-      href: "/design-system",
-      detail: "Tokens, components, and patterns",
-    },
+  Docs: [
+    {category:"Build & explore",label:"Quick start",href:"/docs/quick-start",detail:"A simple introduction, installation and first action"},
+    {category:"Build & explore",label:"Developer integration",href:"/docs/developers",detail:"Integrate an agent-native application"},
+    {category:"Build & explore",label:"Policy playground",href:"/docs/playground",detail:"Examples and local policy checks"},
+    ...sdkPages.map((page,index)=>({category:index<4?"SDK · Foundations":"SDK · Advanced",label:page.title,href:page.slug==="api-reference"?"/docs/api-reference":`/docs/sdk/${page.slug}`,detail:page.description})),
+    {category:"Build & explore",label:"Design system",href:"/design-system",detail:"Tokens, components and patterns"},
   ],
-} as const
+}
 export function AxonHeader({ context }: { context?: ReactNode }) {
   const headerRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLElement>(null)
@@ -88,7 +72,7 @@ export function AxonHeader({ context }: { context?: ReactNode }) {
       const frame = header.getBoundingClientRect()
       const trigger = triggers.current[open]
       const mobile = open === "mobile" || !trigger?.getClientRects().length
-      const width = Math.min(mobile ? 400 : 320, frame.width - 32)
+      const width = Math.min(mobile ? 720 : 960, frame.width - 32)
       const anchor = mobile
         ? frame.width - width - 16
         : trigger!.getBoundingClientRect().left - frame.left - 16
@@ -164,35 +148,13 @@ export function AxonHeader({ context }: { context?: ReactNode }) {
             <ChevronDown size={12} />
           </button>
         ))}
-        {[
-          ["Guardrails", "/#guardrails"],
-          ["Docs", "/docs"],
-        ].map(([label, href]) => (
-          <SiteLink
-            key={label}
-            href={href}
-            onPointerEnter={(event) => {
-              if (event.pointerType === "mouse") {
-                highlightLink(event)
-                showMenu(null)
-              }
-            }}
-            onFocus={(event) => {
-              highlightLink(event)
-              showMenu(null)
-            }}
-            onClick={() => showMenu(null)}
-          >
-            {label}
-          </SiteLink>
-        ))}
       </nav>
       <div className="nav-actions">
         {/* <span className="devnet-label">
           <i /> EIP-8141 prototype
         </span> */}
-        <ActionLink href="/#playground" variant="outline">
-          Explore Axon <ArrowUpRight size={14} />
+        <ActionLink href="/app" variant="outline">
+          View demo <ArrowUpRight size={14} />
         </ActionLink>
         <button
           className="mobile-toggle"
@@ -213,24 +175,13 @@ export function AxonHeader({ context }: { context?: ReactNode }) {
         aria-label={`${open ?? "Protocol"} navigation`}
       >
         <div className="nav-dropdown-content" key={open}>
-          {(open === "mobile"
-            ? Object.values(groups).flat()
-            : (groups[open as keyof typeof groups] ?? [])
-          ).map((item) => (
-            <SiteLink
-              href={item.href}
-              key={item.label}
-              onClick={() => setOpen(null)}
-            >
-              <span className="flex justify-between">
-                {item.label}
-                <ArrowUpRight size={15} />
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {item.detail}
-              </span>
-            </SiteLink>
-          ))}
+          {Array.from(new Set((open === "mobile" ? Object.values(groups).flat() : (groups[open as keyof typeof groups] ?? [])).map(item=>item.category))).map(category=><section className="nav-dropdown-group" key={category}>
+            <h2>{category}</h2>
+            {(open === "mobile" ? Object.values(groups).flat() : (groups[open as keyof typeof groups] ?? [])).filter(item=>item.category===category).map(item=><SiteLink href={item.href} key={item.href} onClick={()=>setOpen(null)}>
+              <span className="flex justify-between">{item.label}<ArrowUpRight size={15}/></span>
+              <span className="mt-1 block text-xs text-muted-foreground">{item.detail}</span>
+            </SiteLink>)}
+          </section>)}
         </div>
       </nav>
     </header>
