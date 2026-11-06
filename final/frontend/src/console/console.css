@@ -25,7 +25,7 @@
   align-items: center;
   gap: 20px;
 }
-.console-brand > .brand svg {
+.console-brand > .brand :is(svg, img) {
   width: 31px;
   height: 31px;
 }
@@ -34,7 +34,7 @@
   display: block;
 }
 .console-brand > span:last-child {
-  font: 10px monospace;
+  font: 10px var(--font-sans);
   color: var(--muted-foreground);
   letter-spacing: 0.14em;
 }
@@ -75,19 +75,19 @@
 }
 .console-layout {
   display: grid;
-  grid-template-columns: 215px minmax(0, 1fr);
-  min-height: calc(100vh - 128px);
+  grid-template-columns: 264px minmax(0, 1fr);
+  min-height: calc(100dvh - 76px);
 }
 .console-sidebar {
-  padding: 34px 18px;
+  padding: 32px 22px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
 }
 .console-eyebrow {
-  font: 10px/1.5 monospace;
+  font: 10px/1.5 var(--font-sans);
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--muted-foreground);
 }
 .console-sidebar > .console-eyebrow {
@@ -116,7 +116,7 @@
   color: var(--primary);
 }
 .console-count {
-  font: 9px monospace;
+  font: 9px var(--font-sans);
   background: var(--muted);
   border: 1px solid var(--border);
   padding: 2px 5px;
@@ -219,7 +219,7 @@
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
-  font: 9px/1.4 monospace;
+  font: 9px/1.4 var(--font-sans);
   letter-spacing: 0.01em;
   padding: 4px 7px;
   border: 1px solid var(--border);
@@ -265,7 +265,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font: 10px monospace;
+  font: 10px var(--font-sans);
   color: var(--foreground);
   word-break: break-all;
 }
@@ -390,7 +390,7 @@
   border: 1px solid var(--border);
   padding: 5px 7px;
   color: var(--muted-foreground);
-  font: 9px monospace;
+  font: 9px var(--font-sans);
 }
 .console-presets button:hover:not(:disabled) {
   color: var(--primary);
@@ -474,7 +474,7 @@
 }
 .console-lane-function {
   margin-top: 23px;
-  font: 10px monospace;
+  font: 10px var(--font-sans);
   min-height: 16px;
   overflow-wrap: anywhere;
 }
@@ -652,7 +652,7 @@
   background: #ffffff02;
 }
 .console-table code {
-  font: 10px monospace;
+  font: 10px var(--font-sans);
 }
 .console-filters {
   display: flex;
@@ -781,7 +781,7 @@
   border-top: 1px solid var(--border);
 }
 .console-frame-list li > span:first-child {
-  font: 8px monospace;
+  font: 8px var(--font-sans);
   color: var(--muted-foreground);
 }
 .console-frame-list strong {
@@ -789,7 +789,7 @@
   font-weight: 400;
 }
 .console-frame-list small {
-  font: 9px monospace;
+  font: 9px var(--font-sans);
   color: var(--muted-foreground);
   margin-left: auto;
 }
@@ -855,7 +855,7 @@
   overflow-wrap: anywhere;
 }
 .console-admission li small {
-  font: 9px monospace;
+  font: 9px var(--font-sans);
   color: var(--muted-foreground);
   flex-shrink: 0;
 }
@@ -871,7 +871,7 @@
   cursor: pointer;
 }
 .console-raw pre {
-  font: 10px/1.7 monospace;
+  font: 10px/1.7 var(--font-sans);
   max-height: 500px;
   overflow: auto;
   background: var(--card);
@@ -935,7 +935,7 @@
 }
 .console-selectors strong {
   display: block;
-  font: 11px monospace;
+  font: 11px var(--font-sans);
 }
 .console-selectors small {
   display: block;
@@ -970,7 +970,7 @@
 }
 .console-walkthrough article > span:first-child {
   color: var(--primary);
-  font: 11px monospace;
+  font: 11px var(--font-sans);
 }
 .console-walkthrough h3 {
   margin: 22px 0 12px;
@@ -1068,7 +1068,7 @@
   align-items: center;
   border-top: 1px solid var(--border);
   padding: 20px 32px;
-  font: 9px monospace;
+  font: 9px var(--font-sans);
   color: var(--muted-foreground);
 }
 @media (min-width: 1800px) {
@@ -1080,7 +1080,7 @@
 }
 @media (max-width: 1200px) {
   .console-layout {
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-columns: 228px minmax(0, 1fr);
   }
   .console-sidebar {
     padding-inline: 12px;
@@ -1268,7 +1268,7 @@
   .console-brand > .brand span {
     font-size: 16px;
   }
-  .console-brand > .brand svg {
+  .console-brand > .brand :is(svg, img) {
     width: 26px;
     height: 26px;
   }
@@ -1437,3 +1437,80 @@
     animation: none;
   }
 }
+
+/* Keep workspace navigation available while the console content scrolls. */
+.console-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.console-sidebar {
+  position: sticky;
+  top: 76px;
+  align-self: start;
+  height: calc(100dvh - 76px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--background);
+}
+.console-sidebar-foot {
+  margin-top: auto;
+  padding-bottom: 0;
+}
+.console-sidebar nav a {
+  flex-shrink: 0;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.console-sidebar nav a:hover {
+  background: var(--card);
+  border-color: var(--border);
+}
+.console-sidebar nav a:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 2px;
+}
+@media (max-width: 800px) {
+  .console-sidebar {
+    position: relative;
+    top: auto;
+    height: auto;
+    overflow: visible;
+  }
+  .console-sidebar nav {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-block: 3px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-sidebar nav a { transition: none; }
+}
+
+/* Roomier workspace navigation, with resources separated from primary tasks. */
+.console-sidebar nav a {
+  min-height: 48px;
+  font-size: 13px;
+  gap: 13px;
+}
+.console-sidebar nav a > svg { flex-shrink: 0; }
+.console-sidebar nav a.active {
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  box-shadow: inset 2px 0 var(--primary);
+}
+.console-sidebar-foot > .console-eyebrow {
+  margin: 0 0 18px;
+  font-size: 10px;
+}
+.console-sidebar-foot a { font-size: 12px; }
+@media (max-width: 800px) {
+  .console-sidebar { padding: 12px 20px; }
+  .console-sidebar nav a { min-height: 42px; font-size: 11px; }
+}
+@media (max-width: 540px) {
+  .console-sidebar { padding-inline: 12px; }
+  .console-sidebar nav a { font-size: 10px; gap: 8px; }
+}
+
+.console-status-inline { display: inline-flex; gap: 8px; align-items: center; }

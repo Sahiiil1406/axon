@@ -1,8 +1,8 @@
-import { Link, Outlet, useLocation } from "react-router-dom"
+import { WorkspaceSidebar } from "@/components/workspace-sidebar"
+import { Outlet, useLocation } from "react-router-dom"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
-  ArrowLeft,
   ArrowUpRight,
   Blocks,
   FileText,
@@ -10,12 +10,12 @@ import {
   Radio,
   Settings2,
 } from "lucide-react"
-import { Logo } from "@/components/brand/primitives"
+import { WorkspaceHeader } from "@/components/workspace-header"
 import { Button } from "@/components/ui/button"
 import { fetchConsoleState, submitCall, updatePermission } from "./api"
 import { failureReason } from "./format"
 import { ConsoleContext } from "./model"
-import { Badge, ConsoleLink, RefreshButton } from "./components"
+import { RefreshButton } from "./components"
 import type {
   CallResult,
   ConsoleState,
@@ -71,7 +71,9 @@ export default function ConsoleApp() {
   }, [ingest])
   useEffect(() => {
     let mounted = true
-    queueMicrotask(() => { if (mounted) void refresh() })
+    queueMicrotask(() => {
+      if (mounted) void refresh()
+    })
     return () => {
       mounted = false
       // This ref is a request generation counter, not a DOM node.
@@ -198,89 +200,42 @@ export default function ConsoleApp() {
         <a href="#console-main" className="sr-only focus:not-sr-only">
           Skip to console
         </a>
-        <header className="console-topbar">
-          <div className="console-brand">
-            <Logo />
-            <span className="console-word-divider" />
-            <span>CONSOLE</span>
-          </div>
-          <div className="console-network">
-            <span
-              className={`console-connection-dot ${error ? "offline" : loading ? "loading" : ""}`}
-            />
-            <span>
-              {error
-                ? "API offline"
-                : state
-                  ? `Chain ${state.network.chainId}`
-                  : "Connecting…"}
-            </span>
-            <Badge>
-              {state ? `Block ${state.network.blockNumber}` : "Devnet"}
-            </Badge>
-          </div>
-          <Link className="console-back" to="/">
-            <ArrowLeft size={13} /> Back to site
-          </Link>
-        </header>
+        <WorkspaceHeader page={path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/activity" ? "Activity" : "Transaction details"} />
         <div className="console-layout">
-          <aside className="console-sidebar">
-            <p className="console-eyebrow">WORKSPACE</p>
-            <nav aria-label="Console navigation">
-              {nav.map((item) => (
-                <ConsoleLink
-                  key={item.href}
-                  href={item.href}
-                  className={
-                    path === item.href ||
-                    (item.href === "/app/activity" &&
-                      path.startsWith("/app/transactions/"))
-                      ? "active"
-                      : ""
-                  }
-                  aria-current={path === item.href ? "page" : undefined}
-                >
-                  <item.icon size={17} />
-                  {item.label}
-                  {item.href === "/app/activity" && state && (
-                    <span className="console-count">
-                      {state.history.length}
-                    </span>
-                  )}
-                </ConsoleLink>
-              ))}
-            </nav>
-            <div className="console-sidebar-foot">
-              <Radio size={17} />
-              <strong>Two lanes. One contract.</strong>
-              <p>
-                Ordinary EOA transactions and agent frame transactions, side by
-                side.
-              </p>
-              <a
-                href="https://altmempoolexplorer.forshtat.com"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Devnet explorer <ArrowUpRight size={13} />
-              </a>
-              <Link to="/docs">
-                Protocol overview <FileText size={13} />
-              </Link>
-            </div>
-          </aside>
+          <WorkspaceSidebar
+            label="Workspace"
+            className="console-sidebar"
+            items={nav.map((item) => ({
+              ...item,
+              active:
+                path === item.href ||
+                (item.href === "/app/activity" &&
+                  path.startsWith("/app/transactions/")),
+              badge:
+                item.href === "/app/activity" && state
+                  ? state.history.length
+                  : undefined,
+            }))}
+            resources={[
+              {
+                label: "Devnet explorer",
+                href: "https://altmempoolexplorer.forshtat.com",
+                icon: ArrowUpRight,
+              },
+              { label: "Protocol overview", href: "/docs", icon: FileText },
+            ]}
+          />
           <main id="console-main" className="console-main">
             <div className="console-breadcrumb">
-              <span>Axon</span>
-              <span>/</span>
-              <span>
-                {path === "/app"
-                  ? "Overview"
-                  : path === "/app/permissions"
-                    ? "Permissions"
-                    : path === "/app/activity"
-                      ? "Activity"
-                      : "Transaction details"}
+              <span className="console-status-inline">
+                <span
+                  className={`console-connection-dot ${error ? "offline" : loading ? "loading" : ""}`}
+                />
+                {error
+                  ? "API offline"
+                  : state
+                    ? `Chain ${state.network.chainId} · Block ${state.network.blockNumber}`
+                    : "Connecting…"}
               </span>
               <span className="console-sync">
                 {state?.checkedAt
@@ -332,15 +287,6 @@ export default function ConsoleApp() {
             <Outlet />
           </main>
         </div>
-        <footer className="console-footer">
-          <span>AXON / EIP-8141 DEVNET</span>
-          <span>Server-side signers · Live permission registry</span>
-          <span>
-            {state?.network.chainId
-              ? `Chain ${state.network.chainId}`
-              : "API connection required"}
-          </span>
-        </footer>
       </div>
     </ConsoleContext.Provider>
   )

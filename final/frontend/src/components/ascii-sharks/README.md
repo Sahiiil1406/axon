@@ -46,3 +46,7 @@ Sharks remain unrestricted. Each hover card includes its movement policy.
 Outside the hero, the reusable component has no permission zone.
 
 Run collision checks with `npm run test:ocean` from the frontend directory.
+
+Use `<AsciiSharks static />` for a single posed shark rendered by the same ASCII
+renderer on a transparent canvas. Static mode has no animation loop, pointer
+listeners, or observers. The Docs sidebar uses this mode with a slight CSS tilt.

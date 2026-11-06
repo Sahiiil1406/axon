@@ -1,10 +1,12 @@
 import { SiteLink } from "@/components/site-link"
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEvent,
   type PointerEvent,
+  type ReactNode,
 } from "react"
 import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react"
 import { ActionLink, Logo } from "./primitives"
@@ -45,7 +47,10 @@ const groups = {
     },
   ],
 } as const
-export function AxonHeader() {
+export function AxonHeader({ context }: { context?: ReactNode }) {
+  const headerRef = useRef<HTMLElement>(null)
+  const menuRef = useRef<HTMLElement>(null)
+  const triggers = useRef<Record<string, HTMLButtonElement | null>>({})
   const [open, setOpen] = useState<string | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [highlight, setHighlight] = useState({ x: 0, width: 0, visible: false })
@@ -73,8 +78,36 @@ export function AxonHeader() {
     },
     []
   )
+  useLayoutEffect(() => {
+    if (!open) return
+    const positionMenu = () => {
+      const header = headerRef.current
+      const menu = menuRef.current
+      if (!header || !menu) return
+      const frame = header.getBoundingClientRect()
+      const trigger = triggers.current[open]
+      const mobile = open === "mobile" || !trigger?.getClientRects().length
+      const width = Math.min(mobile ? 400 : 320, frame.width - 32)
+      const anchor = mobile
+        ? frame.width - width - 16
+        : trigger!.getBoundingClientRect().left - frame.left - 16
+      menu.style.width = `${width}px`
+      menu.style.left = `${Math.max(16, Math.min(anchor, frame.width - width - 16))}px`
+      menu.style.right = "auto"
+      menu.style.top = `${frame.height}px`
+    }
+    positionMenu()
+    const observer = new ResizeObserver(positionMenu)
+    if (headerRef.current) observer.observe(headerRef.current)
+    window.addEventListener("resize", positionMenu)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", positionMenu)
+    }
+  }, [open])
   return (
     <header
+      ref={headerRef}
       className="site-header axon-header"
       onPointerEnter={cancelClose}
       onPointerLeave={(event) => {
@@ -96,6 +129,7 @@ export function AxonHeader() {
       }}
     >
       <Logo />
+      {context}
       <nav aria-label="Main navigation" className="nav-links">
         <span
           className="nav-hover-highlight"
@@ -108,6 +142,9 @@ export function AxonHeader() {
         />
         {Object.entries(groups).map(([name]) => (
           <button
+            ref={(element) => {
+              triggers.current[name] = element
+            }}
             aria-expanded={open === name}
             aria-controls="axon-menu"
             key={name}
@@ -150,9 +187,9 @@ export function AxonHeader() {
         ))}
       </nav>
       <div className="nav-actions">
-        <span className="devnet-label">
+        {/* <span className="devnet-label">
           <i /> EIP-8141 prototype
-        </span>
+        </span> */}
         <ActionLink href="/#playground" variant="outline">
           Explore Axon <ArrowUpRight size={14} />
         </ActionLink>
@@ -166,6 +203,7 @@ export function AxonHeader() {
         </button>
       </div>
       <nav
+        ref={menuRef}
         id="axon-menu"
         className="surface nav-dropdown"
         data-open={!!open}

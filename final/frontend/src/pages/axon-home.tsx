@@ -1,3 +1,4 @@
+import { ApplicationFlow } from "@/components/brand/application-flow"
 import { AsciiSharks } from "@/components/ascii-sharks"
 import { SiteLink } from "@/components/site-link"
 import { useState } from "react"
@@ -21,13 +22,13 @@ import {
   SlidersHorizontal,
   Terminal,
   Wallet,
-  X,
   Zap,
 } from "lucide-react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import {
   ActionLink,
+  AxonMark,
   SectionHeading,
   TextLink,
 } from "@/components/brand/primitives"
@@ -79,41 +80,19 @@ function Separator() {
     </div>
   )
 }
-function SignalMark({ size = 72 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 80 80"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="m16 61 24-45 24 45M25 45h30"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        d="M40 61v13M13 30l13 7M67 30l-13 7"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <circle cx="13" cy="30" r="3" fill="currentColor" />
-      <circle cx="67" cy="30" r="3" fill="currentColor" />
-      <circle cx="40" cy="74" r="3" fill="currentColor" />
-    </svg>
-  )
-}
 function Hero() {
   return (
     <section className="axon-hero cornered" aria-labelledby="hero-title">
       <CornerMarkers />
       <div className="hero-art" aria-hidden="true">
-        <AsciiSharks className="hero-sharks" overlayClassName="hero-sharks-tinted" />
+        <AsciiSharks
+          className="hero-sharks"
+          overlayClassName="hero-sharks-tinted"
+        />
       </div>
       <SiteLink href="/docs" className="axon-announcement">
-        <span className="status-dot" /> BUILT FOR AGENTIC ETHEREUM{" "}
-        <span className="announcement-divider" /> EXPLORE THE PROTOCOL{" "}
+        <span className="status-dot" /> Built for agentic Ethereum{" "}
+        <span className="announcement-divider" /> Explore the protocol{" "}
         <ArrowUpRight size={13} />
       </SiteLink>
       <h1 id="hero-title">
@@ -134,14 +113,9 @@ function Hero() {
           Read the architecture <ArrowUpRight size={16} />
         </SiteLink>
       </div>
-      <div className="hero-signal">
-        <span />
-        <SignalMark size={46} />
-        <span />
-      </div>
       <div className="axon-hero-footer">
-        <span>AGENT AUTONOMY · OWNER AUTHORITY</span>
-        <span>VERIFY → AUTHORIZE → EXECUTE</span>
+        <span>Agent autonomy · Owner authority</span>
+        <span>Verify → Authorize → Execute</span>
       </div>
     </section>
   )
@@ -167,9 +141,9 @@ function Architecture() {
       <ReferenceFrame className="architecture-panel">
         <div className="architecture-top">
           <span className="eyebrow">
-            <span className="status-dot" /> AXON / AUTHORITY FLOW
+            <span className="status-dot" /> Axon / Authority flow
           </span>
-          <span className="eyebrow">ETHEREUM · EIP-8141 DEVNET</span>
+          <span className="eyebrow">Ethereum · EIP-8141 devnet</span>
         </div>
         <div className="architecture-flow">
           {stages.map((step, i) => (
@@ -237,7 +211,7 @@ const boundaries = [
       "grant.expiresAt = expiry",
       "allowed[target][selector] = true",
     ],
-    tag: "PERMISSION REGISTRY",
+    tag: "Permission registry",
   },
   {
     label: "Agent intent",
@@ -250,7 +224,7 @@ const boundaries = [
       "registry.isAllowed(target, selector)",
       "spent + intent.value <= budget",
     ],
-    tag: "AGENT ACCOUNT",
+    tag: "Agent account",
   },
   {
     label: "Protocol rules",
@@ -263,7 +237,7 @@ const boundaries = [
       "slippage <= MAX_SLIPPAGE_BPS",
       "oracle.updatedAt() is fresh",
     ],
-    tag: "AGENT-NATIVE PROTOCOL",
+    tag: "Agent-native protocol",
   },
 ]
 function Permissions() {
@@ -364,58 +338,34 @@ function Comparison() {
         Axon’s account reads the external registry during validation. That
         foreign storage read is outside this devnet’s public-mempool rules.
       </SectionHeading>
-      <ReferenceFrame className="comparison-grid">
-        <article className="comparison-before">
-          <span className="eyebrow">MIRRORED AUTHORITY</span>
-          <h3>
-            A permission can outlive
-            <br />
-            the owner’s decision.
-          </h3>
-          <div className="incident-stack">
-            <div>
-              <RotateCcw size={16} />
-              <span>Grant copied into account storage</span>
-              <small>SYNCED</small>
+      <ReferenceFrame className="revocation-comparison">
+        <div className="revocation-event">
+          <span className="revocation-event-icon"><KeyRound size={19} /></span>
+          <div><span className="eyebrow">One owner decision</span><h3>The owner revokes the grant.</h3></div>
+          <span className="revocation-event-badge"><ShieldX size={13} /> Registry updated</span>
+        </div>
+        <div className="revocation-options">
+          <article className="revocation-option">
+            <div className="revocation-option-heading"><span className="revocation-option-icon"><Layers3 size={21} /></span><span>Mirrored authority</span></div>
+            <h3>The copy still says yes.</h3>
+            <p>The registry changed. The account’s local snapshot did not.</p>
+            <div className="revocation-snapshot">
+              <div><span>Live registry</span><strong>Revoked</strong><span className="revocation-version">New grant hash</span></div>
+              <div className="revocation-stale"><span>Account’s copy</span><strong>Still active</strong><span className="revocation-version">Previous grant hash</span></div>
             </div>
-            <div>
-              <X size={16} />
-              <span>Owner revokes the live grant</span>
-              <small>CHANGED</small>
+            <div className="revocation-result"><RotateCcw size={17} /><div><strong>Waiting for synchronization</strong><p>The owner must call <code>syncGrant()</code> before the account observes the revocation.</p></div></div>
+          </article>
+          <article className="revocation-option revocation-live">
+            <div className="revocation-option-heading"><AxonMark size={27} /><span>Live authority with Axon</span></div>
+            <h3>The next intent sees no.</h3>
+            <p>The account reads the current registry during validation.</p>
+            <div className="revocation-snapshot">
+              <div><span>Live registry</span><strong>Revoked</strong><span className="revocation-version">New grant hash</span></div>
+              <div className="revocation-fresh"><span>Account’s read</span><strong>Current state</strong><span className="revocation-version">Live grant hash</span></div>
             </div>
-            <div>
-              <LockKeyhole size={16} />
-              <span>Local mirror still carries old authority</span>
-              <small>STALE</small>
-            </div>
-          </div>
-          <p>
-            The mirrored account needs an explicit sync to observe the new
-            permission state.
-          </p>
-        </article>
-        <article className="comparison-after">
-          <span className="eyebrow">LIVE AUTHORITY WITH AXON</span>
-          <h3>
-            Current intent.
-            <br />
-            Current permission.
-          </h3>
-          <div className="authority-emblem">
-            <SignalMark size={110} />
-            <span className="orbit-ring ring-one" />
-            <span className="orbit-ring ring-two" />
-            <span className="orbit-ring ring-three" />
-          </div>
-          <div className="live-state">
-            <span className="status-dot" /> PermissionRegistry.current(account)
-            <Check size={15} />
-          </div>
-          <p>
-            A grant mutation changes its hash. Pending intents using the old
-            grant fail the freshness check.
-          </p>
-        </article>
+            <div className="revocation-result"><ShieldCheck size={17} /><div><strong>Old authority is rejected</strong><p>Intents signed against the previous grant fail the freshness check. No mirror to synchronize.</p></div></div>
+          </article>
+        </div>
       </ReferenceFrame>
       <div className="comparison-caption">
         <span>Validation reads live authority.</span>
@@ -499,10 +449,10 @@ function Guardrails() {
         >
           <span className="eyebrow">
             {tab === "Budget"
-              ? "01 / SPENDING AUTHORITY"
+              ? "01 / Spending authority"
               : tab === "Scope"
                 ? "02 / CONTRACT + FUNCTION"
-                : "03 / LIVE GRANT STATE"}
+                : "03 / Live grant state"}
           </span>
           <h3>
             {tab === "Budget"
@@ -538,7 +488,7 @@ function Guardrails() {
             <span>
               <Terminal size={15} /> Policy playground
             </span>
-            <span className="eyebrow">LOCAL SIMULATION</span>
+            <span className="eyebrow">Local simulation</span>
           </div>
           <div className="demo-account">
             <div className="account-icon">
@@ -749,7 +699,7 @@ function Closing() {
         </SiteLink>
       </div>
       <span className="closing-mark">
-        <SignalMark size={40} />
+        <AxonMark size={40} />
       </span>
     </section>
   )
@@ -760,6 +710,8 @@ export function AxonHome() {
       <Hero />
       <Separator />
       <Architecture />
+      <Separator />
+      <ApplicationFlow />
       <Separator />
       <Permissions />
       <Separator />

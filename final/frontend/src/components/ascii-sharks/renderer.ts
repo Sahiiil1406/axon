@@ -302,10 +302,12 @@ export class AsciiRenderer {
   private fishStyles = FISH_ALPHAS.map((a) => `rgba(230,238,255,${a})`);
 
   private canvas: HTMLCanvasElement;
+  private transparentBackground: boolean;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options: { transparentBackground?: boolean } = {}) {
     this.canvas = canvas;
-    const ctx = canvas.getContext("2d", { alpha: false });
+    this.transparentBackground = options.transparentBackground ?? false;
+    const ctx = canvas.getContext("2d", { alpha: this.transparentBackground });
     if (!ctx) throw new Error("2D canvas unavailable");
     this.ctx = ctx;
     this.bg = document.createElement("canvas");
@@ -383,8 +385,11 @@ export class AsciiRenderer {
     if (!g) return;
     const { width: W, height: H, dpr } = this;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.fillStyle = "#000";
-    g.fillRect(0, 0, W, H);
+    g.clearRect(0, 0, W, H);
+    if (!this.transparentBackground) {
+      g.fillStyle = "#000";
+      g.fillRect(0, 0, W, H);
+    }
 
   }
 
@@ -399,11 +404,13 @@ export class AsciiRenderer {
     this.diffuse(dt);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this.transparentBackground) ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.bg, 0, 0);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this.markFish(world);
     this.drawDots(t);
+    this.drawCellBackgrounds(world);
 
     ctx.font = `600 ${Math.round(ch * 0.74)}px ${this.fontFamily}`;
     ctx.textAlign = "center";
@@ -427,22 +434,13 @@ export class AsciiRenderer {
       : null;
     const target = this.hoverTarget;
     if (!target) return;
-    let left: number, right: number, top: number, bottom: number;
-    if ("nodes" in target) {
-      const xs: number[] = [], ys: number[] = [];
-      for (let i = 0; i < target.nodes.length; i += 2) {
-        xs.push(target.nodes[i]); ys.push(target.nodes[i + 1]);
-      }
-      const padding = Math.max(this.ch, target.length * 0.18);
-      left = Math.min(...xs) - padding; right = Math.max(...xs) + padding;
-      top = Math.min(...ys) - padding; bottom = Math.max(...ys) + padding;
-    } else {
-      if (!target.alive) { this.hoverTarget = null; return; }
-      left = Math.floor(target.x / this.cw) * this.cw - 5;
-      right = left + this.cw + 10;
-      top = Math.floor(target.y / this.ch) * this.ch - 5;
-      bottom = top + this.ch + 10;
+    const xs: number[] = [], ys: number[] = [];
+    for (let i = 0; i < target.nodes.length; i += 2) {
+      xs.push(target.nodes[i]); ys.push(target.nodes[i + 1]);
     }
+    const padding = Math.max(this.ch, target.length * 0.18);
+    const left = Math.min(...xs) - padding, right = Math.max(...xs) + padding;
+    const top = Math.min(...ys) - padding, bottom = Math.max(...ys) + padding;
     const ctx = this.ctx;
     const length = Math.min(12, (right - left) / 3, (bottom - top) / 3);
     ctx.save();
@@ -465,17 +463,17 @@ export class AsciiRenderer {
     const identity = isShark ? target.id : world.fish.indexOf(target) + 1;
     const human = isShark ? identity % 4 === 0 : identity % 7 === 0;
     const profiles = [
-      { name: "REBALANCE", action: "vault.rebalance()", budget: "0.02 ETH / epoch", scope: "Vault only" },
-      { name: "SWAP", action: "router.swap()", budget: "0.01 ETH / epoch", scope: "Approved pairs" },
-      { name: "KEEPER", action: "vault.harvest()", budget: "0.005 ETH / epoch", scope: "Harvest only" },
-      { name: "TREASURY", action: "vault.deposit()", budget: "0.05 ETH / epoch", scope: "Deposit only" },
+      { name: "Rebalance", action: "vault.rebalance()", budget: "0.02 ETH / epoch", scope: "Vault only" },
+      { name: "Swap", action: "router.swap()", budget: "0.01 ETH / epoch", scope: "Approved pairs" },
+      { name: "Keeper", action: "vault.harvest()", budget: "0.005 ETH / epoch", scope: "Harvest only" },
+      { name: "Treasury", action: "vault.deposit()", budget: "0.05 ETH / epoch", scope: "Deposit only" },
     ];
     const profile = profiles[Math.abs(identity) % profiles.length];
     const rows = human
-      ? [["IDENTITY", "Human / owner wallet"], ["AUTHORITY", "Direct EOA signature"], ["PERMISSION", "Owner-authorized call"], ["DELEGATION", "None"], ["EXECUTION", "Manual approval"]]
-      : [["IDENTITY", "Delegated agent"], ["PERMISSION", profile.action], ["SCOPE", profile.scope], ["BUDGET", profile.budget], ["GUARDRAILS", "Live grant + expiry"]];
+      ? [["Identity", "Human / owner wallet"], ["Authority", "Direct EOA signature"], ["Permission", "Owner-authorized call"], ["Delegation", "None"], ["Execution", "Manual approval"]]
+      : [["Identity", "Delegated agent"], ["Permission", profile.action], ["Scope", profile.scope], ["Budget", profile.budget], ["Guardrails", "Live grant + expiry"]];
     const width = Math.min(272, this.width - 24);
-    rows.push(["MOVEMENT", MOVEMENT_LABELS["nodes" in target ? "unrestricted" : target.movementPolicy]]);
+    rows.push(["Movement", MOVEMENT_LABELS["nodes" in target ? "unrestricted" : target.movementPolicy]]);
     const height = 176;
     const gap = 16;
     const fitsRight = bounds.right + gap + width < this.width - 12;
@@ -483,7 +481,7 @@ export class AsciiRenderer {
     const y = clamp((bounds.top + bounds.bottom - height) / 2, 12, Math.max(12, this.height - height - 12));
     const ctx = this.ctx;
     ctx.save();
-    ctx.font = `500 10px ${this.fontFamily}`;
+    ctx.font = '500 11px "STK Bureau Sans", sans-serif';
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "rgba(12,14,17,0.96)";
@@ -498,7 +496,7 @@ export class AsciiRenderer {
     ctx.lineTo(fitsRight ? x : x + width, y + height / 2);
     ctx.stroke();
     ctx.fillStyle = "#ffffff";
-    const name = human ? "HUMAN / OWNER" : `AGENT / ${profile.name}`;
+    const name = human ? "Human / Owner" : `Agent / ${profile.name}`;
     ctx.fillText(`${name}-${String(Math.abs(identity)).padStart(3, "0")}`, x + 12, y + 18, width - 24);
     ctx.fillStyle = "rgba(255,255,255,0.48)";
     ctx.fillRect(x + 12, y + 32, width - 24, 1);
@@ -510,8 +508,8 @@ export class AsciiRenderer {
       ctx.fillText(value, x + 92, rowY, width - 104);
     });
     ctx.fillStyle = "rgba(255,255,255,0.46)";
-    ctx.font = `500 8px ${this.fontFamily}`;
-    ctx.fillText("ILLUSTRATIVE IDENTITY / POLICY", x + 12, y + 163);
+    ctx.font = '500 9px "STK Bureau Sans", sans-serif';
+    ctx.fillText("Illustrative identity / policy", x + 12, y + 163);
     ctx.restore();
   }
 
@@ -897,6 +895,25 @@ export class AsciiRenderer {
       ctx.fillStyle = flag === FLAG_EYE ? "#ffffff" : `rgb(${Math.min(255, Math.round(brightness * tr))},${Math.min(255, Math.round(brightness * tg))},${Math.min(255, Math.round(brightness * tb + 4))})`;
       ctx.fillText(glyph, x + cw / 2, y + ch / 2 + 1);
     }
+  }
+
+  /** Subtle cell fills belong only to swimmers inside the permission zone. */
+  private drawCellBackgrounds(world: World) {
+    const zone = world.permissionBounds;
+    if (!zone) return;
+    const { ctx, cw, ch, cols, sharkFlag } = this;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(zone.left, zone.top, zone.right - zone.left, zone.bottom - zone.top);
+    ctx.clip();
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    for (let i = 0; i < sharkFlag.length; i++) {
+      const body = sharkFlag[i] !== 0 && sharkFlag[i] !== FLAG_EDGE;
+      if (!body) continue;
+      const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
+      ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2);
+    }
+    ctx.restore();
   }
 
   // ── fish, dots, heat ────────────────────────────────────────────────

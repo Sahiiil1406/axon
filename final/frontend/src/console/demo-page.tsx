@@ -122,7 +122,7 @@ export function DemoPage() {
   return (
     <>
       <PageHeading
-        eyebrow="FINALCOUNTER / TRANSACTION CONSOLE"
+        eyebrow="FinalCounter / Transaction console"
         title="Same call. Different authority."
         actions={
           <ConsoleLink className="console-outline-link" href="/app/permissions">
@@ -191,7 +191,7 @@ export function DemoPage() {
       </dl>
       <div className="console-demo-grid">
         <Panel
-          eyebrow="01 / EXECUTE"
+          eyebrow="01 / Execute"
           title="Build a call"
           action={
             <Badge tone={busy ? "warn" : "muted"}>
@@ -333,7 +333,7 @@ export function DemoPage() {
           </form>
         </Panel>
         <Panel
-          eyebrow="02 / COMPARE"
+          eyebrow="02 / Compare"
           title="What the chain saw"
           action={
             <Badge tone={last.human && last.agent ? "good" : "muted"}>
@@ -369,7 +369,7 @@ export function DemoPage() {
         </Panel>
       </div>
       <Panel
-        eyebrow="03 / INSPECT"
+        eyebrow="03 / Inspect"
         title="Latest receipt"
         action={
           latest && (
@@ -392,7 +392,7 @@ export function DemoPage() {
         )}
       </Panel>
       <Panel
-        eyebrow="04 / ACTIVITY"
+        eyebrow="04 / Activity"
         title="Recent calls"
         action={
           <ConsoleLink className="console-text-link" href="/app/activity">

@@ -45,7 +45,7 @@ function RevokeDialog({
       <div className="console-dialog-icon">
         <ShieldOff size={25} />
       </div>
-      <p className="console-eyebrow">LIVE PERMISSION REGISTRY</p>
+      <p className="console-eyebrow">LIVE Permission registry</p>
       <h2 id="revoke-title">Revoke the agent grant?</h2>
       <p>
         The server will submit an owner transaction to deactivate this grant.
@@ -104,7 +104,7 @@ export function PermissionsPage() {
   return (
     <>
       <PageHeading
-        eyebrow="PERMISSIONREGISTRY / OWNER CONTROLS"
+        eyebrow="PermissionRegistry / Owner controls"
         title="Define the agent’s authority."
         actions={
           <RefreshButton label="Reload grant" onClick={() => void reload()} />
@@ -115,7 +115,7 @@ export function PermissionsPage() {
       </PageHeading>
       <div className="console-permission-grid">
         <Panel
-          eyebrow="01 / CURRENT GRANT"
+          eyebrow="01 / Current grant"
           title="Onchain authority"
           action={
             <Badge tone={grant ? (grant.active ? "good" : "bad") : "muted"}>
@@ -189,7 +189,7 @@ export function PermissionsPage() {
           </div>
         </Panel>
         <Panel
-          eyebrow="02 / EDIT AUTHORITY"
+          eyebrow="02 / Edit authority"
           title={
             grant && !grant.active
               ? "Regrant agent access"
@@ -314,7 +314,7 @@ export function PermissionsPage() {
         </Panel>
       </div>
       <Panel
-        eyebrow="03 / DEMO WORKFLOW"
+        eyebrow="03 / Demo workflow"
         title="Put the permission boundary to work"
       >
         <div className="console-walkthrough">
@@ -357,7 +357,7 @@ export function PermissionsPage() {
       </Panel>
       <div className="console-permission-results">
         <Panel
-          eyebrow="04 / OWNER TRANSACTIONS"
+          eyebrow="04 / Owner transactions"
           title="Permission updates"
           action={<Badge>{ownerTransactions.length} transactions</Badge>}
         >
@@ -381,7 +381,7 @@ export function PermissionsPage() {
           )}
         </Panel>
         <Panel
-          eyebrow="05 / RESULTING STATE"
+          eyebrow="05 / Resulting state"
           title="Authority after the update"
         >
           <div className="console-grant-details">
