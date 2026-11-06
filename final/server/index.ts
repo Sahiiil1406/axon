@@ -8,7 +8,7 @@ import { signRequest } from "@worldcoin/idkit-core/signing";
  *   - human: ordinary EOA transaction from DEPLOYER_PRIVATE_KEY
  *   - agent: EIP-8141 VERIFY + SENDER frame transaction from the Axon SDK
  *
- * Keys stay on 127.0.0.1. This is a devnet demo, not a production signer.
+ * Keys remain server-side. This is a devnet demo, not a production signer.
  */
 import {
   createServer,
@@ -18,8 +18,7 @@ import {
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createPublicClient,
@@ -44,12 +43,18 @@ import { sepolia } from "viem/chains";
 import { getEnsText, normalize } from "viem/ens";
 import { AxonClient } from "@axon/sdk";
 import { openAgentStore } from "./agent-store.ts";
+import { createStaticHandler } from "./static.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(HERE, "..");
-const WEB = resolve(ROOT, "frontend/dist");
 const envFile = [resolve(HERE, ".env"), resolve(ROOT, ".env"), resolve(ROOT, "../.env")].find(existsSync);
 if (envFile) process.loadEnvFile(envFile);
+const WEB = process.env.FINAL_STATIC_DIR
+  ? resolve(HERE, process.env.FINAL_STATIC_DIR)
+  : existsSync(resolve(HERE, "public/index.html"))
+    ? resolve(HERE, "public")
+    : resolve(ROOT, "frontend/dist");
+const serveStatic = createStaticHandler(WEB);
 
 interface Deployment {
   chainId?: number;
@@ -357,19 +362,6 @@ const json = (res: ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body, null, 2));
 };
 
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".txt": "text/plain; charset=utf-8",
-};
-
 async function readBody(
   req: IncomingMessage,
 ): Promise<Record<string, unknown>> {
@@ -512,7 +504,7 @@ async function readAllowlist(account = ACCOUNT) {
   return Object.fromEntries(entries) as Record<FunctionId, boolean>;
 }
 
-const agentStore = openAgentStore(resolve(HERE, "agent-registrations.json"));
+const agentStore = openAgentStore(process.env.AGENT_STORE_FILE ?? resolve(HERE, "agent-registrations.json"));
 const activeEnsRegistrations = new Set<string>();
 const pendingEnsRegistrationWrites = new Map<string, { hash: Hex; value: string }>();
 
@@ -1141,50 +1133,6 @@ function remember(result: Record<string, unknown>) {
   history.splice(20);
 }
 
-function serveStatic(
-  req: IncomingMessage,
-  res: ServerResponse,
-  pathname: string,
-) {
-  let path = pathname;
-  if (path === "/demo" || path === "/demo/" || path === "/permissions" || path === "/permissions/") {
-    res.writeHead(302, { location: path.startsWith("/permissions") ? "/app/permissions" : "/app" });
-    res.end();
-    return;
-  }
-  if (path === "/" || path === "/app" || path.startsWith("/app/") || path === "/docs" || path === "/docs/" || path === "/design-system" || path === "/design-system/") path = "/index.html";
-
-  const file = resolve(WEB, `.${path}`);
-  if (file !== WEB && !file.startsWith(`${WEB}${sep}`)) {
-    res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
-    res.end("forbidden");
-    return;
-  }
-
-  readFile(file)
-    .then((body) => {
-      res.writeHead(200, {
-        "content-type":
-          MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
-        "cache-control": "no-store",
-        "content-length": body.length,
-        "x-content-type-options": "nosniff",
-      });
-      if (req.method === "HEAD") res.end();
-      else res.end(body);
-    })
-    .catch((error) => {
-      if ((error as { code?: string })?.code === "ENOENT") {
-        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        res.end("not found");
-      } else {
-        console.error("static:", error);
-        res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-        res.end("internal error");
-      }
-    });
-}
-
 const frontendOrigins = new Set(
   (process.env.AXON_FRONTEND_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173")
     .split(",")
@@ -1484,7 +1432,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (!API_ONLY && !url.pathname.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
-      serveStatic(req, res, url.pathname);
+      await serveStatic(req, res, url.pathname);
       return;
     }
 
