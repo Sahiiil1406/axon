@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowRight, Check, KeyRound, ShieldOff, Globe, User } from "lucide-react"
+import { ArrowRight, Check, KeyRound, ShieldOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConsole } from "./model"
 import { validateBudget } from "./api"
@@ -17,7 +17,7 @@ import {
 } from "./components"
 import { demoNames } from "./demo-agents"
 import { duration, eth, expiry, short } from "./format"
-import type { AgentInfo, FunctionId } from "./types"
+import type { FunctionId } from "./types"
 
 function RevokeDialog({
   open,
@@ -48,11 +48,11 @@ function RevokeDialog({
       <div className="console-dialog-icon">
         <ShieldOff size={25} />
       </div>
-      <p className="console-eyebrow">LIVE PERMISSION REGISTRY</p>
+      <p className="console-eyebrow">Live permission registry</p>
       <h2 id="revoke-title">Revoke {targetLabel}?</h2>
       <p>
-        Deactivating this grant sets its authority to inactive. Agent calls
-        will be rejected until you save a new grant.
+        Deactivating this grant sets its authority to inactive. Agent calls will
+        be rejected until you save a new grant.
       </p>
       <div>
         <Button variant="outline" onClick={onClose}>
@@ -89,21 +89,27 @@ export function PermissionsPage() {
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState("")
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null) // null = default account
-  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (state && !dirty && !selectedAgent) {
-      setBudget(state.grant.budgetEth)
-      setAllow({ ...state.allowlist })
-      setInvalid(null)
+    let current = true
+    queueMicrotask(() => {
+      if (current && state && !dirty && !selectedAgent) {
+        setBudget(state.grant.budgetEth)
+        setAllow({ ...state.allowlist })
+        setInvalid(null)
+      }
+    })
+    return () => {
+      current = false
     }
   }, [state, dirty, selectedAgent])
 
   const selectedAgentInfo = selectedAgent
-    ? ens.agents.find((a) => a.name === selectedAgent) ?? null
+    ? (ens.agents.find((a) => a.name === selectedAgent) ?? null)
     : null
 
-  const demoSelected = !!selectedAgent && demoNames.includes(selectedAgent) && !selectedAgentInfo
+  const demoSelected =
+    !!selectedAgent && demoNames.includes(selectedAgent) && !selectedAgentInfo
   const disabled = !state || loading || !!error || !!busy
   const agentDisabled = disabled || !!selectedAgentInfo?.unresolved
 
@@ -114,7 +120,13 @@ export function PermissionsPage() {
     setInvalid(message)
     if (message) return
 
-    if (await permission({ budgetEth: budget.trim(), allow, agentName: selectedAgent ?? undefined })) {
+    if (
+      await permission({
+        budgetEth: budget.trim(),
+        allow,
+        agentName: selectedAgent ?? undefined,
+      })
+    ) {
       setDirty(false)
     }
   }
@@ -141,19 +153,21 @@ export function PermissionsPage() {
     : state?.grant
 
   const grantRows: [string, React.ReactNode][] = [
-    [
-      "Agent account",
-      <ChainLink value={state?.contracts.agentAccount} />,
-    ],
+    ["Agent account", <ChainLink value={state?.contracts.agentAccount} />],
     ["Agent key", <ChainLink value={grant?.agentKey} />],
     ["Owner", <ChainLink value={grant?.owner} />],
     ["Registry", <ChainLink value={state?.contracts.registry} />],
     ...(selectedAgent && selectedAgentInfo
-      ? [["ENS name", <ChainLink value={selectedAgentInfo.name} />]]
+      ? [
+          ["ENS name", <span>{selectedAgentInfo.name}</span>] as [
+            string,
+            React.ReactNode,
+          ],
+        ]
       : []),
     ...(selectedAgent && selectedAgentInfo
       ? []
-      : [
+      : ([
           [
             "Grant hash",
             grant ? (
@@ -161,10 +175,7 @@ export function PermissionsPage() {
                 <code title={grant.grantHash}>
                   {short(grant.grantHash, 10, 8)}
                 </code>
-                <CopyButton
-                  value={grant.grantHash}
-                  label="Copy grant hash"
-                />
+                <CopyButton value={grant.grantHash} label="Copy grant hash" />
               </span>
             ) : (
               "—"
@@ -180,41 +191,51 @@ export function PermissionsPage() {
                 ? "2 · P256"
                 : (grant?.keyScheme ?? "—"),
           ],
-        ]),
-  ];
+        ] as [string, React.ReactNode][])),
+  ]
 
   return (
     <>
       <PageHeading
-        eyebrow="PERMISSIONREGISTRY / OWNER CONTROLS"
+        eyebrow="PermissionRegistry / owner controls"
         title="Define the agent's authority."
         actions={
           <RefreshButton label="Reload grant" onClick={() => void reload()} />
         }
       >
-        Set the spending budget and callable selectors. Changes are submitted
-        by the demo server's owner key and read live by the agent account.
-        For ENS agents, permissions live on the subdomain's Permissioned
-        Resolver (Sepolia) and are synced to the devnet PermissionRegistry.
+        Set the spending budget and callable selectors. Changes are submitted by
+        the demo server's owner key and read live by the agent account. For ENS
+        agents, permissions live on the subdomain's Permissioned Resolver
+        (Sepolia) and are synced to the devnet PermissionRegistry.
       </PageHeading>
 
       {/* Agent selector */}
-      <Panel eyebrow="00 / SELECT AGENT" title="Choose authority target">
+      <Panel eyebrow="00 / Select agent" title="Choose authority target">
         <div className="console-agent-selector">
           <label htmlFor="agent-selector">Authority target</label>
           <select
             id="agent-selector"
             value={selectedAgent ?? "default"}
             onChange={(e) => {
-              setSelectedAgent(e.target.value === "default" ? null : e.target.value)
+              setSelectedAgent(
+                e.target.value === "default" ? null : e.target.value
+              )
               setDirty(false)
             }}
             disabled={disabled}
           >
-            <option value="default">Default account (devnet PermissionRegistry)</option>
-            {demoNames.filter((name) => !ens.agents.some((agent) => agent.name === name)).map((name) => (
-              <option key={name} value={name}>{name} (demo)</option>
-            ))}
+            <option value="default">
+              Default account (devnet PermissionRegistry)
+            </option>
+            {demoNames
+              .filter(
+                (name) => !ens.agents.some((agent) => agent.name === name)
+              )
+              .map((name) => (
+                <option key={name} value={name}>
+                  {name} (demo)
+                </option>
+              ))}
             {ens.agents.map((a) => (
               <option key={a.name} value={a.name}>
                 {a.name} ({a.active ? "active" : "revoked"})
@@ -227,7 +248,7 @@ export function PermissionsPage() {
               size="sm"
               onClick={() => setSelectedAgent(null)}
             >
-            Use default
+              Use default
             </Button>
           )}
           {ens.agents.length === 0 && !state?.ens?.humanName && (
@@ -239,186 +260,206 @@ export function PermissionsPage() {
         </div>
       </Panel>
 
-      <Panel
-        eyebrow="01 / CURRENT GRANT"
-        title={
-          selectedAgent ? `ENS agent: ${selectedAgent}` : "Onchain authority"
-        }
-        action={
-          <Badge tone={grant ? (grant.active ? "good" : "bad") : "muted"}>
-            {grant
-              ? grant.active
-                ? "Active"
-                : "Revoked"
-              : loading
-                ? "Loading"
-                : "Unavailable"}
-          </Badge>
-        }
-      >
-        <dl className="console-grant-stats">
-          <Stat
-            label="Budget / epoch"
-            value={grant ? `${grant.budgetEth} ETH` : "—"}
-          />
-          <Stat
-            label="Spent this epoch"
-            value={grant ? `${grant.spentEth} ETH` : "—"}
-          />
-          <Stat
-            label="Remaining"
-            value={grant ? `${grant.remainingEth} ETH` : "—"}
-            tone="good"
-          />
-          <Stat label="Epoch length" value={duration(grant?.epochLengthSec)} />
-        </dl>
-        <div className="console-grant-details">
-          <DefinitionList
-            rows={grantRows}
-          />
-        </div>
-      </Panel>
-
-      <Panel
-        eyebrow="02 / EDIT AUTHORITY"
-        title={
-          grant && !grant.active
-            ? "Regrant agent access"
-            : selectedAgent
-              ? `Update ${selectedAgent} permissions`
-              : "Update permission"
-        }
-        action={
-          <Badge tone={dirty ? "warn" : "muted"}>
-            {dirty ? "Unsaved changes" : state ? "In sync" : "Awaiting state"}
-          </Badge>
-        }
-      >
-        <form className="console-form" onSubmit={(e) => void save(e)}>
-          <label htmlFor="permission-budget">
-            Budget per epoch (ETH)
-            <input
-              id="permission-budget"
-              value={budget}
-              disabled={agentDisabled}
-              inputMode="decimal"
-              placeholder="0.05"
-              maxLength={80}
-              aria-invalid={!!invalid}
-              aria-describedby={invalid ? "permission-validation" : undefined}
-              onChange={(e) => {
-                setBudget(e.target.value)
-                setDirty(true)
-                setInvalid(null)
-              }}
+      <div className="console-permission-grid">
+        <Panel
+          eyebrow="01 / Current grant"
+          title={
+            selectedAgent ? `ENS agent: ${selectedAgent}` : "Onchain authority"
+          }
+          action={
+            <Badge tone={grant ? (grant.active ? "good" : "bad") : "muted"}>
+              {grant
+                ? grant.active
+                  ? "Active"
+                  : "Revoked"
+                : loading
+                  ? "Loading"
+                  : "Unavailable"}
+            </Badge>
+          }
+        >
+          <dl className="console-grant-stats">
+            <Stat
+              label="Budget / epoch"
+              value={grant ? `${grant.budgetEth} ETH` : "—"}
             />
-          </label>
-          <div className="console-presets">
-            <span>Quick budget</span>
-            {["0.001", "0.01", "0.05", "0.5", "1"].map((value) => (
-              <button
-                key={value}
-                type="button"
+            <Stat
+              label="Spent this epoch"
+              value={grant ? `${grant.spentEth} ETH` : "—"}
+            />
+            <Stat
+              label="Remaining"
+              value={grant ? `${grant.remainingEth} ETH` : "—"}
+              tone="good"
+            />
+            <Stat
+              label="Epoch length"
+              value={duration(grant?.epochLengthSec)}
+            />
+          </dl>
+          <div className="console-grant-details">
+            <DefinitionList rows={grantRows} />
+          </div>
+        </Panel>
+
+        <Panel
+          eyebrow="02 / Edit authority"
+          title={
+            grant && !grant.active
+              ? "Regrant agent access"
+              : selectedAgent
+                ? `Update ${selectedAgent} permissions`
+                : "Update permission"
+          }
+          action={
+            <Badge tone={dirty ? "warn" : "muted"}>
+              {dirty ? "Unsaved changes" : state ? "In sync" : "Awaiting state"}
+            </Badge>
+          }
+        >
+          <form className="console-form" onSubmit={(e) => void save(e)}>
+            <label htmlFor="permission-budget">
+              Budget per epoch (ETH)
+              <input
+                id="permission-budget"
+                value={budget}
                 disabled={agentDisabled}
-                onClick={() => {
-                  setBudget(value)
+                inputMode="decimal"
+                placeholder="0.05"
+                maxLength={80}
+                aria-invalid={!!invalid}
+                aria-describedby={invalid ? "permission-validation" : undefined}
+                onChange={(e) => {
+                  setBudget(e.target.value)
                   setDirty(true)
                   setInvalid(null)
                 }}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-          {invalid && (
-            <p className="console-inline-error" id="permission-validation" role="alert">
-              {invalid}
-            </p>
-          )}
-          <fieldset className="console-selectors" disabled={agentDisabled}>
-            <legend>Allowlisted selectors</legend>
-            {state?.functions.map((fn) => (
-              <label key={fn.id}>
-                <div>
-                  <strong>{fn.signature}</strong>
-                  <small>
-                    {fn.selector} · {fn.note}
-                  </small>
-                </div>
-                <input
-                  type="checkbox"
-                  aria-label={`Allow ${fn.signature}`}
-                  checked={!!allow[fn.id]}
-                  onChange={(e) => {
-                    setAllow((prev) => ({
-                      ...prev,
-                      [fn.id]: e.target.checked,
-                    }))
+              />
+            </label>
+            <div className="console-presets">
+              <span>Quick budget</span>
+              {["0.001", "0.01", "0.05", "0.5", "1"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={agentDisabled}
+                  onClick={() => {
+                    setBudget(value)
                     setDirty(true)
+                    setInvalid(null)
                   }}
-                />
-              </label>
-            ))}
-            {selectedAgent && selectedAgentInfo && selectedAgentInfo.allowlist.length > 0 && (
-              <p className="console-help">
-                ENS allowlist: {selectedAgentInfo.allowlist.map((e) => `${e.selector} → ${e.target}`).join(", ")}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            {invalid && (
+              <p
+                className="console-inline-error"
+                id="permission-validation"
+                role="alert"
+              >
+                {invalid}
               </p>
             )}
-            {!state && (
+            <fieldset className="console-selectors" disabled={agentDisabled}>
+              <legend>Allowlisted selectors</legend>
+              {state?.functions.map((fn) => (
+                <label key={fn.id}>
+                  <div>
+                    <strong>{fn.signature}</strong>
+                    <small>
+                      {fn.selector} · {fn.note}
+                    </small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    aria-label={`Allow ${fn.signature}`}
+                    checked={!!allow[fn.id]}
+                    onChange={(e) => {
+                      setAllow((prev) => ({
+                        ...prev,
+                        [fn.id]: e.target.checked,
+                      }))
+                      setDirty(true)
+                    }}
+                  />
+                </label>
+              ))}
+              {selectedAgent &&
+                selectedAgentInfo &&
+                selectedAgentInfo.allowlist.length > 0 && (
+                  <p className="console-help">
+                    ENS allowlist:{" "}
+                    {selectedAgentInfo.allowlist
+                      .map((e) => `${e.selector} → ${e.target}`)
+                      .join(", ")}
+                  </p>
+                )}
+              {!state && (
+                <p className="console-help">
+                  Connect to the API to load the current allowlist.
+                </p>
+              )}
+            </fieldset>
+            <p className="console-help">
+              {demoSelected
+                ? "Demo selection. Permission changes are disabled for this name."
+                : selectedAgent
+                  ? `Saving updates ENS text records for ${selectedAgent} (Sepolia) and syncs the devnet grant. World ID verification is required.`
+                  : grant && !grant.active
+                    ? "The grant is revoked. Saving re-grants the existing agent key with the budget and selectors above."
+                    : "Saving submits grantAgent from the owner key, then updates any changed selector permissions."}
+            </p>
+            {!demoSelected && (
               <p className="console-help">
-                Connect to the API to load the current allowlist.
+                Verify with World ID, then submit the permission change.
               </p>
             )}
-          </fieldset>
-          <p className="console-help">
-            {demoSelected
-              ? "Demo selection. Permission changes are disabled for this name."
-              : selectedAgent
-              ? `Saving updates ENS text records for ${selectedAgent} (Sepolia) and syncs the devnet grant. World ID verification is required.`
-              : grant && !grant.active
-                ? "The grant is revoked. Saving re-grants the existing agent key with the budget and selectors above."
-                : "Saving submits grantAgent from the owner key, then updates any changed selector permissions."}
-          </p>
-          {!demoSelected && <p className="console-help">Verify with World ID, then submit the permission change.</p>}
-          <div className="console-permission-actions">
-            <Button
-              type="submit"
-              disabled={agentDisabled || demoSelected || worldIdStatus === "verifying"}
-              aria-busy={busy === "updating permissions"}
-            >
-              <Check size={14} />
-              {!demoSelected && worldIdStatus !== "verified"
-                ? "Verify with World ID"
-                : grant && !grant.active ? "Save & regrant" : "Save permission"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={disabled || !dirty}
-              onClick={() => {
-                setDirty(false)
-                setInvalid(null)
-              }}
-            >
-              Reset
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={disabled || demoSelected || !grant?.active}
-              onClick={() => {
-                setRevokeTarget(selectedAgent ?? "default account")
-                setRevokeOpen(true)
-              }}
-            >
-              <ShieldOff size={14} /> Revoke grant
-            </Button>
-          </div>
-        </form>
-      </Panel>
+            <div className="console-permission-actions">
+              <Button
+                type="submit"
+                disabled={
+                  agentDisabled || demoSelected || worldIdStatus === "verifying"
+                }
+                aria-busy={busy === "updating permissions"}
+              >
+                <Check size={14} />
+                {!demoSelected && worldIdStatus !== "verified"
+                  ? "Verify with World ID"
+                  : grant && !grant.active
+                    ? "Save & regrant"
+                    : "Save permission"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled || !dirty}
+                onClick={() => {
+                  setDirty(false)
+                  setInvalid(null)
+                }}
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={disabled || demoSelected || !grant?.active}
+                onClick={() => {
+                  setRevokeTarget(selectedAgent ?? "default account")
+                  setRevokeOpen(true)
+                }}
+              >
+                <ShieldOff size={14} /> Revoke grant
+              </Button>
+            </div>
+          </form>
+        </Panel>
+      </div>
 
       <Panel
-        eyebrow="03 / DEMO WORKFLOW"
+        eyebrow="03 / Demo workflow"
         title="Put the permission boundary to work"
       >
         <div className="console-walkthrough">
@@ -426,9 +467,8 @@ export function PermissionsPage() {
             <span>01</span>
             <h3>Compare the two callers</h3>
             <p>
-              Run increment() through humanCall and agentCall. The same
-              contract advances the human counter by 1 and the agent counter by
-              10.
+              Run increment() through humanCall and agentCall. The same contract
+              advances the human counter by 1 and the agent counter by 10.
             </p>
             <ConsoleLink className="console-text-link" href="/app">
               Open call console <ArrowRight size={13} />
@@ -439,8 +479,8 @@ export function PermissionsPage() {
             <h3>Exercise the epoch budget</h3>
             <p>
               Set a budget below your intended spend, then submit
-              payAmount(uint256) as the agent. Inspect E_EPOCH_BUDGET, raise
-              the budget, and run the same call again.
+              payAmount(uint256) as the agent. Inspect E_EPOCH_BUDGET, raise the
+              budget, and run the same call again.
             </p>
             <ConsoleLink className="console-text-link" href="/app/activity">
               Inspect the outcomes <ArrowRight size={13} />
@@ -463,9 +503,9 @@ export function PermissionsPage() {
               <span>04</span>
               <h3>Manage ENS agents</h3>
               <p>
-                Create agent subdomains under {ens.humanName}, each with its
-                own Permissioned Resolver. World ID verification gates
-                authority changes.
+                Create agent subdomains under {ens.humanName}, each with its own
+                Permissioned Resolver. World ID verification gates authority
+                changes.
               </p>
               <ConsoleLink className="console-text-link" href="/app/agents">
                 Open agent manager <ArrowRight size={13} />
@@ -477,7 +517,7 @@ export function PermissionsPage() {
 
       <div className="console-permission-results">
         <Panel
-          eyebrow="04 / OWNER TRANSACTIONS"
+          eyebrow="04 / Owner transactions"
           title="Permission updates"
           action={<Badge>{ownerTransactions.length} transactions</Badge>}
         >
@@ -501,7 +541,7 @@ export function PermissionsPage() {
           )}
         </Panel>
         <Panel
-          eyebrow="05 / RESULTING STATE"
+          eyebrow="05 / Resulting state"
           title="Authority after the update"
         >
           <div className="console-grant-details">
@@ -540,7 +580,10 @@ export function PermissionsPage() {
         onClose={() => setRevokeOpen(false)}
         onConfirm={() => {
           setRevokeOpen(false)
-          void permission({ active: false, agentName: selectedAgent ?? undefined })
+          void permission({
+            active: false,
+            agentName: selectedAgent ?? undefined,
+          })
         }}
         targetLabel={revokeTarget || "the agent grant"}
       />

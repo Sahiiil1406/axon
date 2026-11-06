@@ -4,24 +4,16 @@ import { ArrowUpRight } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+/** Canonical mark: the same public asset is used by the favicon and every UI logo. */
+export function AxonMark({ size = 40, className }: { size?: number; className?: string }) {
+  return <img src="/axon.svg" width={size} height={size} className={className} alt="" aria-hidden="true" style={{ objectFit: "contain" }} />
+}
+
 export function Logo() {
   return (
     <SiteLink href="/" className="brand axon-brand" aria-label="Axon home">
-      <svg
-        width="40"
-        height="40"
-        viewBox="0 0 406 488"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M203 0L378.803 366H27.1968L203 0Z" fill="#1B5C6C" />
-        <path
-          d="M363 270C274.911 270 203.5 336.262 203.5 418C203.5 336.262 132.089 270 44 270C132.089 270 203.5 155.385 203.5 14C203.5 155.385 274.911 270 363 270Z"
-          fill="#8ECED0"
-        />
-      </svg>
-
-      <span>AXON</span>
+      <AxonMark />
+      <span>Axon</span>
     </SiteLink>
   )
 }

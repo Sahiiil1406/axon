@@ -1,36 +1,35 @@
-import { IDKitSessionWidget, CredentialRequest, type IDKitResultSession, type RpContext } from "@worldcoin/idkit"
-import { Link, Outlet, useLocation } from "react-router-dom"
+import { WorkspaceSidebar } from "@/components/workspace-sidebar"
+import { Outlet, useLocation } from "react-router-dom"
+import {
+  IDKitSessionWidget,
+  CredentialRequest,
+  type IDKitResultSession,
+  type RpContext,
+} from "@worldcoin/idkit"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
-  ArrowLeft,
   ArrowUpRight,
   Blocks,
   FileText,
-  Fingerprint,
   LayoutDashboard,
   Radio,
   Settings2,
-  User,
-  ShieldCheck,
   Globe,
 } from "lucide-react"
-import { Logo } from "@/components/brand/primitives"
+import { WorkspaceHeader } from "@/components/workspace-header"
 import { Button } from "@/components/ui/button"
 import {
   fetchConsoleState,
   fetchEnsState,
   requestWorldIdContext,
-  resolveEnsAgent,
-  registerEnsAgent,
   submitCall,
   updatePermission,
 } from "./api"
 import { failureReason } from "./format"
 import { ConsoleContext } from "./model"
-import { Badge, ConsoleLink, RefreshButton } from "./components"
+import { RefreshButton } from "./components"
 import type {
-  AgentInfo,
   CallResult,
   CallRestrictions,
   ConsoleState,
@@ -61,9 +60,8 @@ export default function ConsoleApp() {
   const [worldIdProof, setWorldIdProof] = useState<IDKitResultSession>()
   const [worldIdContext, setWorldIdContext] = useState<RpContext>()
   const [worldIdOpen, setWorldIdOpen] = useState(false)
-  const [worldIdStatus, setWorldIdStatus] = useState<WorldIdStatus>(
-    "not-verified"
-  )
+  const [worldIdStatus, setWorldIdStatus] =
+    useState<WorldIdStatus>("not-verified")
   const [callRestrictions, setCallRestrictions] = useState<CallRestrictions>({
     agentEnabled: true,
     allowedFunctions: { increment: true, pay: true, payAmount: true },
@@ -75,6 +73,7 @@ export default function ConsoleApp() {
   const writing = useRef(false)
   const ingest = useCallback((next: ConsoleState) => {
     setState(next)
+    setEns(next.ens ?? { humanName: null, agents: [] })
     setLast(() => {
       const merged: Partial<Record<Lane, CallResult>> = {}
       for (const lane of ["human", "agent"] as const) {
@@ -112,13 +111,16 @@ export default function ConsoleApp() {
   }, [])
   useEffect(() => {
     let mounted = true
-    queueMicrotask(() => { if (mounted) void refresh() })
-    queueMicrotask(() => { if (mounted) void refreshEns() })
+    queueMicrotask(() => {
+      if (mounted) void refresh()
+    })
     return () => {
       mounted = false
+      // Request generation counter: invalidate pending responses on unmount.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       requestVersion.current++
     }
-  }, [refresh, refreshEns])
+  }, [refresh])
   const call = async (
     lane: Lane,
     fn: FunctionId,
@@ -173,9 +175,7 @@ export default function ConsoleApp() {
     return worldIdProof
   }
 
-  const permission = async (
-    input: PermissionInput
-  ) => {
+  const permission = async (input: PermissionInput) => {
     if (writing.current || !state) return false
     if (!worldIdProof) {
       await verifyWorldId()
@@ -235,7 +235,10 @@ export default function ConsoleApp() {
     setNotice(null)
     if (!worldId || "error" in worldId) {
       setWorldIdStatus("failed")
-      setNotice({ message: worldId?.error ?? "World ID configuration is unavailable.", tone: "bad" })
+      setNotice({
+        message: worldId?.error ?? "World ID configuration is unavailable.",
+        tone: "bad",
+      })
       return false
     }
     if (worldIdStatus === "verifying") return false
@@ -246,7 +249,13 @@ export default function ConsoleApp() {
       setWorldIdOpen(true)
     } catch (error) {
       setWorldIdStatus("failed")
-      setNotice({ message: error instanceof Error ? error.message : "Could not start World ID verification.", tone: "bad" })
+      setNotice({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not start World ID verification.",
+        tone: "bad",
+      })
     }
     return false
   }
@@ -255,13 +264,16 @@ export default function ConsoleApp() {
       ...prev,
       [key]:
         key === "allowedFunctions"
-          ? { ...prev.allowedFunctions, ...(value as Record<FunctionId, boolean>) }
+          ? {
+              ...prev.allowedFunctions,
+              ...(value as Record<FunctionId, boolean>),
+            }
           : value,
     }))
   }
   useEffect(() => {
     const original = document.title
-    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/agents" ? "Agents (ENS)" : path === "/app/activity" ? "Activity" : "Transaction details"}`
+    document.title = `Axon Console — ${path === "/app" ? "Overview" : path === "/app/permissions" ? "Permissions" : path === "/app/agents" ? "Agents (ENS)" : path === "/app/activity" ? "Activity" : path === "/app/agents" ? "Agents (ENS)" : "Transaction details"}`
     return () => {
       document.title = original
     }
@@ -301,7 +313,10 @@ export default function ConsoleApp() {
           open={worldIdOpen}
           onOpenChange={(open) => {
             setWorldIdOpen(open)
-            if (!open) setWorldIdStatus((status) => status === "verifying" ? "not-verified" : status)
+            if (!open)
+              setWorldIdStatus((status) =>
+                status === "verifying" ? "not-verified" : status
+              )
           }}
           rp_context={worldIdContext}
           environment="production"
@@ -314,7 +329,11 @@ export default function ConsoleApp() {
           }}
           onError={() => {
             setWorldIdStatus("failed")
-            setNotice({ message: "World ID could not complete verification. Check the widget error and try again.", tone: "bad" })
+            setNotice({
+              message:
+                "World ID could not complete verification. Check the widget error and try again.",
+              tone: "bad",
+            })
           }}
         />
       )}
@@ -322,118 +341,67 @@ export default function ConsoleApp() {
         <a href="#console-main" className="sr-only focus:not-sr-only">
           Skip to console
         </a>
-        <header className="console-topbar">
-          <div className="console-brand">
-            <Logo />
-            <span className="console-word-divider" />
-            <span>CONSOLE</span>
-          </div>
-          <div className="console-network">
-            <span
-              className={`console-connection-dot ${error ? "offline" : loading ? "loading" : ""}`}
-            />
-            <span>
-              {error
-                ? "API offline"
-                : state
-                  ? `Chain ${state.network.chainId}`
-                  : "Connecting…"}
-            </span>
-            <Badge>
-              {state ? `Block ${state.network.blockNumber}` : "Devnet"}
-            </Badge>
-            {state?.ens.humanName && (
-              <span className="console-ens-pill">
-                <Globe size={14} /> ENS: {state.ens.humanName}
-              </span>
-            )}
-            <span
-              className={`console-worldid-dot ${worldIdStatus}`}
-            />
-            <span className="console-worldid-label">
-              World ID: {worldIdStatus === "verified" ? "Verified" : worldIdStatus}
-            </span>
-            <Link className="console-back" to="/">
-              <ArrowLeft size={13} /> Back to site
-            </Link>
-          </div>
-        </header>
+        <WorkspaceHeader
+          page={
+            path === "/app"
+              ? "Overview"
+              : path === "/app/permissions"
+                ? "Permissions"
+                : path === "/app/activity"
+                  ? "Activity"
+                  : path === "/app/agents"
+                    ? "Agents (ENS)"
+                    : "Transaction details"
+          }
+        />
         <div className="console-layout">
-          <aside className="console-sidebar">
-            <p className="console-eyebrow">WORKSPACE</p>
-            <nav aria-label="Console navigation">
-              {nav.map((item) => (
-                <ConsoleLink
-                  key={item.href}
-                  href={item.href}
-                  className={
-                    path === item.href ||
-                    (item.href === "/app/activity" &&
-                      path.startsWith("/app/transactions/"))
-                      ? "active"
-                      : ""
-                  }
-                  aria-current={path === item.href ? "page" : undefined}
-                >
-                  <item.icon size={17} />
-                  {item.label}
-                  {item.href === "/app/activity" && state && (
-                    <span className="console-count">
-                      {state.history.length}
-                    </span>
-                  )}
-                </ConsoleLink>
-              ))}
-            </nav>
-            <div className="console-sidebar-foot">
-              <Radio size={17} />
-              <strong>Two lanes. One contract.</strong>
-              <p>
-                Ordinary EOA transactions and agent frame transactions, side by
-                side.
-              </p>
-              <a
-                href="https://altmempoolexplorer.forshtat.com"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Devnet explorer <ArrowUpRight size={13} />
-              </a>
-              <Link to="/docs">
-                Protocol overview <FileText size={13} />
-              </Link>
-              {state?.ens.humanName && (
-                <div className="console-sidebar-ens">
-                  <p className="console-eyebrow">ENS IDENTITY</p>
-                  <p>Human: <strong>{state.ens.humanName}</strong></p>
-                  <p>
-                    Agents: {state.ens.agents.length}{" "}
-                    {state.ens.agents.length > 0 && (
-                      <span>
-                        ({state.ens.agents
-                          .map((a) => a.name)
-                          .join(", ")})
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-          </aside>
+          <WorkspaceSidebar
+            label="Workspace"
+            className="console-sidebar"
+            items={nav.map((item) => ({
+              ...item,
+              active:
+                path === item.href ||
+                (item.href === "/app/activity" &&
+                  path.startsWith("/app/transactions/")),
+              badge:
+                item.href === "/app/activity" && state
+                  ? state.history.length
+                  : undefined,
+            }))}
+            resources={[
+              {
+                label: "Devnet explorer",
+                href: "https://altmempoolexplorer.forshtat.com",
+                icon: ArrowUpRight,
+              },
+              { label: "Protocol overview", href: "/docs", icon: FileText },
+            ]}
+          />
           <main id="console-main" className="console-main">
             <div className="console-breadcrumb">
-              <span>Axon</span>
-              <span>/</span>
-              <span>
-                {path === "/app"
-                  ? "Overview"
-                  : path === "/app/permissions"
-                    ? "Permissions"
-                    : path === "/app/agents"
-                      ? "Agents (ENSv2)"
-                      : path === "/app/activity"
-                        ? "Activity"
-                        : "Transaction details"}
+              <span className="console-status-inline">
+                <span
+                  className={`console-connection-dot ${error ? "offline" : loading ? "loading" : ""}`}
+                />
+                {error
+                  ? "API offline"
+                  : state
+                    ? `Chain ${state.network.chainId} · Block ${state.network.blockNumber}`
+                    : "Connecting…"}
+              </span>
+              {state?.ens.humanName && (
+                <span className="console-ens-pill">
+                  <Globe size={14} />
+                  {state.ens.humanName} · {state.ens.agents.length} agents
+                </span>
+              )}
+              <span className="console-worldid-row">
+                <span className={`console-worldid-dot ${worldIdStatus}`} />
+                <span className="console-worldid-label">
+                  World ID:{" "}
+                  {worldIdStatus === "verified" ? "Verified" : worldIdStatus}
+                </span>
               </span>
               <span className="console-sync">
                 {state?.checkedAt
@@ -485,18 +453,6 @@ export default function ConsoleApp() {
             <Outlet />
           </main>
         </div>
-        <footer className="console-footer">
-          <span>AXON / EIP-8141 DEVNET</span>
-          <span>Server-side signers · Live permission registry</span>
-          <span>
-            {state?.network.chainId
-              ? `Chain ${state.network.chainId}`
-              : "API connection required"}
-          </span>
-          {state?.ens.humanName && (
-            <span>ENSv2 on Sepolia · {state.ens.agents.length} agent(s)</span>
-          )}
-        </footer>
       </div>
     </ConsoleContext.Provider>
   )

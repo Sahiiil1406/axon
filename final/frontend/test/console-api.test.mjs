@@ -2,6 +2,10 @@ import { afterEach, test } from "node:test"
 import assert from "node:assert/strict"
 import {
   fetchConsoleState,
+  fetchEnsState,
+  resolveEnsAgent,
+  registerEnsAgent,
+  requestWorldIdContext,
   request,
   submitCall,
   updatePermission,
@@ -143,4 +147,31 @@ test("counter deltas and wei formatting remain exact beyond Number.MAX_SAFE_INTE
     at: "2026-11-06T01:00:00.000Z",
   }
   assert.equal(receiptId(failed, 1), receiptId(failed, 12))
+})
+
+test("ENS identity reads and named agent calls retain main's payloads", async () => {
+  const seen = []
+  globalThis.fetch = async (url, options) => {
+    seen.push({ url, options })
+    return response(url === "/api/state" ? { ens: { humanName: "owner.eth", agents: [] } } : { ok: true })
+  }
+  assert.equal((await fetchEnsState()).humanName, "owner.eth")
+  await resolveEnsAgent("trader.owner.eth")
+  assert.equal(seen[1].url, "/api/ens/resolve?name=trader.owner.eth")
+  await submitCall("agent", "pay", null, "trader.owner.eth")
+  assert.equal(JSON.parse(seen[2].options.body).agentName, "trader.owner.eth")
+})
+test("World ID context and ENS registration preserve proof and target fields", async () => {
+  const seen = []
+  globalThis.fetch = async (url, options) => {
+    seen.push({ url, options })
+    return response({ ok: true })
+  }
+  await requestWorldIdContext()
+  assert.equal(seen[0].url, "/api/world-id/request")
+  assert.equal(seen[0].options.method, "POST")
+  const input = { subdomain: "trader", budgetEth: "0.01", agentKey: "", agentAccount: "", worldIdProof: { session_id: "session_test" } }
+  await registerEnsAgent(input)
+  assert.equal(seen[1].url, "/api/ens/register")
+  assert.deepEqual(JSON.parse(seen[1].options.body), input)
 })

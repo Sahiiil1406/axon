@@ -1,7 +1,6 @@
 import type { IDKitResultSession } from "@worldcoin/idkit"
 import { createContext, useContext } from "react"
 import type {
-  AgentInfo,
   CallResult,
   CallRestrictions,
   ConsoleState,
@@ -28,7 +27,12 @@ export interface ConsoleModel {
   callRestrictions: CallRestrictions
   refresh: () => Promise<void>
   refreshEns: () => Promise<void>
-  call: (lane: Lane, fn: FunctionId, amount: string | null, agentName?: string) => Promise<boolean>
+  call: (
+    lane: Lane,
+    fn: FunctionId,
+    amount: string | null,
+    agentName?: string
+  ) => Promise<boolean>
   permission: (input: PermissionInput) => Promise<boolean>
   verifyWorldId: () => Promise<boolean>
   setCallRestriction: (key: keyof CallRestrictions, value: unknown) => void

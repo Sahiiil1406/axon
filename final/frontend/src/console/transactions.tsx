@@ -351,7 +351,7 @@ export function ActivityPage() {
   return (
     <>
       <PageHeading
-        eyebrow="WORKSPACE / ACTIVITY"
+        eyebrow="Workspace / Activity"
         title="Every call, in context."
         actions={<RefreshButton />}
       >
@@ -360,7 +360,7 @@ export function ActivityPage() {
       </PageHeading>
       <Panel
         title="Transaction activity"
-        eyebrow="CALL HISTORY"
+        eyebrow="Call history"
         action={<Badge>{filtered.length} results</Badge>}
       >
         <div className="console-filters">
@@ -437,14 +437,14 @@ export function TransactionPage({ id }: { id: string }) {
         <ArrowLeft size={13} /> Back to activity
       </ConsoleLink>
       <PageHeading
-        eyebrow="ACTIVITY / TRANSACTION"
+        eyebrow="Activity / Transaction"
         title="Inspect the execution."
       >
         A receipt, account state changes, frame simulation, and admission checks
         from the demo API.
       </PageHeading>
       <Panel
-        eyebrow="TRANSACTION RESULT"
+        eyebrow="Transaction result"
         title={result?.signature ?? "Transaction details"}
         action={
           result?.hash && (

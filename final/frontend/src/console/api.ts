@@ -21,9 +21,10 @@ export async function request<T>(
   timeoutMs = init.method === "POST" ? 180_000 : 20_000
 ): Promise<T> {
   const controller = new AbortController()
-  const timeout = timeoutMs > 0
-    ? window.setTimeout(() => controller.abort(), timeoutMs)
-    : undefined
+  const timeout =
+    timeoutMs > 0
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : undefined
   try {
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
@@ -56,11 +57,13 @@ export async function request<T>(
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw new Error(
-        "The API request timed out. Refresh state before retrying the action."
+        "The API request timed out. Refresh state before retrying the action.",
+        { cause: error }
       )
     if (error instanceof TypeError)
       throw new Error(
-        "Cannot reach the demo API. Check the server connection, then refresh state."
+        "Cannot reach the demo API. Check the server connection, then refresh state.",
+        { cause: error }
       )
     throw error
   } finally {
@@ -113,7 +116,11 @@ export const resolveEnsAgent = async (name: string) => {
   }>(`/api/ens/resolve?name=${encodeURIComponent(name)}`)
 }
 export const requestWorldIdContext = () =>
-  request<RpContext>("/api/world-id/request", { method: "POST" }, registrationBase)
+  request<RpContext>(
+    "/api/world-id/request",
+    { method: "POST" },
+    registrationBase
+  )
 
 export const registerEnsAgent = (input: {
   subdomain: string
@@ -122,14 +129,18 @@ export const registerEnsAgent = (input: {
   budgetEth: string
   worldIdProof?: IDKitResultSession
 }) =>
-  request<{ ok: true; agent: string; txs: Array<{ label: string; hash: string }> }>(
+  request<{
+    ok: true
+    agent: string
+    txs: Array<{ label: string; hash: string }>
+  }>(
     "/api/ens/register",
     {
       method: "POST",
       body: JSON.stringify(input),
     },
     registrationBase,
-    0,
+    0
   )
 
 /** Exact decimal validation: never convert an ETH amount to a floating point number. */
