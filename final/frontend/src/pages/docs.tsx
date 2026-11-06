@@ -1,4 +1,3 @@
-import { SidebarShark } from "@/components/sidebar-shark"
 import { WorkspaceSidebar } from "@/components/workspace-sidebar"
 import { useLocation } from "react-router-dom"
 import {
@@ -20,7 +19,6 @@ export function Docs() {
     <div className="docs-workspace axon-docs">
       <WorkspaceSidebar
         label="Documentation"
-        graphic={<SidebarShark />}
         items={[
           { label: "Architecture", href: "/docs#architecture", icon: Layers3 },
           { label: "Permission grants", href: "/docs#grants", icon: KeyRound },

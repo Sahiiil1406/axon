@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
+import { SidebarShark } from "./sidebar-shark"
 import { SiteLink } from "./site-link"
 import "./workspace-sidebar.css"
 
@@ -14,7 +15,7 @@ export function WorkspaceSidebar({
   label,
   items,
   resources,
-  graphic,
+  graphic = <SidebarShark />,
   className = "",
 }: {
   label: string

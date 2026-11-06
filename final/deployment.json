@@ -3,13 +3,13 @@
   "network": "eip8141-altmempool-devnet",
   "rpc": "https://altmempool.forshtat.com",
   "sidecar": "https://altmempool.forshtat.com/rpc",
-  "registry": "0xe4a0ae628805ca2a1304b7b655aec991a0ad99ec",
-  "agentAccount": "0x96a21935ddbf224d64efc933449016bbb4551a2e",
-  "counter": "0x7da3c1783ff52e381b8db09e23b459b7e54198c6",
+  "registry": "0x4f11286a8ac8a277a5a26a8eef9ac1bfa12de3a3",
+  "agentAccount": "0x4b124373c515878c1a4979da295d6f9ca62ff848",
+  "counter": "0xf1a099235662a9e6c2eb24fd8611538ee4436ef3",
   "owner": "0x0b012EEfCff398daB58e418d85e30398346a5c51",
   "agentKey": "0x09c57921D33232f7B5bf1cFB0B3C2a084eE900a9",
-  "grantHash": "0xcc5c16c774672bd3a80c2211252ea480aeb7a0dc46032b96582bec6e7f81b4f8",
-  "grantActive": false,
+  "grantHash": "0x04a32bbb613dc516b9b6fffa0783b5a0ea670c3d0f184d929204255fc727d660",
+  "grantActive": true,
   "budgetPerEpoch": "10000000000000000",
   "human": {
     "step": 1,
@@ -19,6 +19,6 @@
     "step": 10,
     "price": "100000000000000"
   },
-  "deployTx": "0xda8945fe142464f307d52bdf37bc6744f42a8b42893b78e306f2cb2b5c305681",
-  "deployedAt": "2026-11-05T21:13:30.466Z"
+  "deployTx": "0x15a72c54e8eb23a27e248ba49c54c2649ff8c47eccccda851bae959f35dacbd6",
+  "deployedAt": "2026-11-06T07:12:44.785Z"
 }

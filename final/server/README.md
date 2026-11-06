@@ -43,3 +43,21 @@ npx tsx --test test/frame.test.ts test/builder.test.ts
 ```
 
 The separate manifest test suite additionally requires the generated `codegen/manifest.json`.
+
+## Fresh devnet deployment
+
+After a devnet reset, fund `DEPLOYER_PRIVATE_KEY` on the configured chain, then run:
+
+```sh
+npm run deploy --prefix final/contract -- --stack
+```
+
+This builds and deploys the registry, agent account and counter, activates a seven-day
+0.01 ETH/day grant, allows the three counter methods, funds the account to 0.1 ETH,
+and stakes it using the sidecar configuration. It updates `final/deployment.json`
+and the addresses in the three existing environment files. Restart the server afterward.
+World ID and ENS settings are preserved.
+
+To finish setup for an already deployed counter without deploying another, use
+`--counter ADDRESS` instead of `--stack`. If it is not yet recorded in the deployment
+file, provide its transaction hash as `FINAL_COUNTER_DEPLOY_TX`.

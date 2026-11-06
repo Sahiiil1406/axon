@@ -246,3 +246,30 @@
   transform: rotate(-38deg) scaleX(-1);
   transform-origin: center;
 }
+
+/* Keep console routes on the same sidebar spacing as Documentation. */
+.workspace-sidebar.console-sidebar {
+  padding: 32px 0;
+}
+.workspace-sidebar.console-sidebar nav {
+  gap: 6px;
+}
+.workspace-sidebar.console-sidebar nav a {
+  padding: 13px 14px;
+  min-height: 48px;
+  gap: 13px;
+  font-size: 12px;
+}
+@media (max-width: 800px) {
+  .workspace-sidebar.console-sidebar {
+    padding: 16px;
+  }
+  .workspace-sidebar.console-sidebar nav {
+    justify-content: initial;
+  }
+  .workspace-sidebar.console-sidebar nav a {
+    min-height: 42px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+}
