@@ -1,5 +1,7 @@
-# Axon
+<img width="1920" height="1080" alt="Screenshot From 2026-11-07 04-43-48" src="https://github.com/user-attachments/assets/d03304ee-962b-46ae-943b-a1e7aa9199ee" />
 
+
+# Axon
 **Ethereum accounts that let AI agents transact within permissions their owners control.**
 
 Axon lets an owner authorize an agent to call specific functions across deployed smart contracts, set an ETH budget per spending period, set an expiry, and revoke access. The agent signs with its own key, and the account enforces the owner's rules onchain.
@@ -121,3 +123,16 @@ To choose different local ports:
 ```sh
 FINAL_PORT=8902 FRONTEND_PORT=5175 ./start.sh
 ```
+
+
+<img width="1693" height="956" alt="Screenshot From 2026-11-07 04-53-09" src="https://github.com/user-attachments/assets/e04e6ccc-946d-4562-91cd-b51b8b4f238b" />
+<img width="4266" height="2415" alt="Frame 123282 (1)" src="https://github.com/user-attachments/assets/6e7b21cf-2e0c-4bdb-9090-26b4c7d17d85" />
+<img width="1920" height="1080" alt="Screenshot From 2026-11-07 04-56-58" src="https://github.com/user-attachments/assets/35abc401-b397-40f3-9387-eb46a8b6fb1e" />
+<img width="1917" height="948" alt="Screenshot From 2026-11-07 05-39-50" src="https://github.com/user-attachments/assets/5d046a2d-0dd7-489b-a92f-7579327604f3" />
+<img width="1920" height="1080" alt="Screenshot From 2026-11-07 04-51-38" src="https://github.com/user-attachments/assets/efd5ca7d-7836-406a-b72e-b07baeafd5e7" />
+<img width="1920" height="1080" alt="Screenshot From 2026-11-07 04-52-08" src="https://github.com/user-attachments/assets/b7b83e5b-b5c8-4dd4-99f1-c70fd830432b" />
+
+
+
+
+
