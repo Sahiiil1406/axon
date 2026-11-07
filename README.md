@@ -1,24 +1,68 @@
 # Axon
 
-**Agent-native accounts for Ethereum.** An agent should get a policy, not a private key.
+**Ethereum accounts that let AI agents transact within permissions their owners control.**
 
-Axon makes the owner's permissions a first-class part of the transaction — enforced by
-the account's own validation frame — and gives developers the SDK and admission rules to
-build for agents at all.
+Axon lets an owner authorize an agent to call specific functions across deployed smart contracts, set an ETH budget per spending period, set an expiry, and revoke access. The agent signs with its own key, and the account enforces the owner's rules onchain.
 
-## ENSv2 Integration (ENSv2 track)
+Axon makes Ethereum contracts easier for AI agents to discover and use. Contract manifests describe the available actions and their inputs, while ENSv2 gives each named agent a readable identity. The console uses World ID to verify human presence before submitting an agent registration or a change to its authority.
 
-Axon uses Sepolia for agent identity and the EIP-8141 devnet for permissions:
+When an agent transacts, its account checks the live grant and enforces the spending budget. For private policies, the agent can prove that a specific call is authorized without revealing the rest of the policy.
 
-- **Agent names:** Axon publishes identity records on the parent’s ENSv2 Permissioned Resolver on Sepolia and registers each label in the parent’s UserRegistry so it appears under Subnames. The configured signer must own the second-level .eth parent. If the parent has no UserRegistry, Axon creates and attaches one.
-- **Execution:** The devnet `PermissionRegistry` stores the effective budget, allowlist,
-  and revocation state. Permission updates write only to the devnet.
+## Why we built it
 
-- **World ID Agent Pass:** authority changes (create agent, update budget/allowlist, revoke)
-  require a human World ID verification before the owner transaction is submitted
+An agent that can decide what to do still needs a defined scope for what it can execute. An owner might allow an agent to deposit into a vault within a budget, then give it access to a second contract as its responsibilities grow. With Axon, the owner can update the grant without redeploying the agent account. Validation reads the live grant, so a change or revocation can take effect even after the agent has signed a transaction.
 
-**Two chains:** ENSv2 identity lives on Sepolia; agent execution runs on the EIP-8141 devnet
-(chain 1337).
+## How it works
+
+1. **Define contract actions.** The code generator turns annotated Solidity, compiled ABIs, and deployment metadata into manifests. Each action identifies a deployed contract, a function, and its arguments. Developers can add actions for new contracts, and owners choose which actions each agent can execute.
+2. **Register the agent and set its grant.** The console registers an ENSv2 subname on Sepolia and manages the agent's permissions on the EIP-8141 devnet (chain 1337). World ID provides a Proof of Human checkpoint before the console submits a registration or permission change.
+3. **Sign and execute.** The TypeScript SDK encodes the call and builds a signed EIP-8141 transaction. The `VERIFY` frame checks the signature and live grant. The `SENDER` frame enforces the spending budget and executes the call.
+
+For example, an owner can allow an agent to call `FinalCounter.increment()` while leaving ETH payments outside its grant. The same agent can call additional functions once the owner updates the allowlist. The contract manifest tells the SDK how to build each call, and the onchain grant determines whether the agent can execute it.
+
+## Basic architecture
+
+```mermaid
+flowchart LR
+    Owner["Owner in the React console"] --> API["Node.js API"]
+    API --> World["World ID proof verification"]
+    API -->|Registers agent identity| ENS["ENSv2 on Sepolia"]
+    API -->|Writes owner-authorized grants| Registry["PermissionRegistry on chain 1337"]
+    Codegen["Contract code generator"] --> Manifest["Action manifest"]
+    Manifest --> SDK["Agent runner and TypeScript SDK"]
+    SDK -->|Resolves named agent| ENS
+    SDK -->|Submits signed frame transaction| Sidecar["Alternative-mempool sidecar"]
+    Sidecar --> Account["Agent account on chain 1337"]
+    Account -->|VERIFY reads live grant| Registry
+    Account -->|SENDER executes authorized call| Target["Target contract"]
+```
+
+Sepolia supplies the agent's identity and signer binding. The EIP-8141 devnet holds the grant and executes the transaction. For private calls, the runner includes a zero-knowledge proof in the intent, and the scoped account checks it in `SENDER` before calling the target.
+
+## Integrations and devnet plumbing
+
+- **ENSv2** gives agents human-readable identities on Sepolia. The parent name's UserRegistry organizes agents as subnames for role-based delegation, and its Permissioned Resolver stores identity records. The devnet's `PermissionRegistry` enforces each agent's grant.
+- **World ID** supplies a Proof of Human checkpoint. The React console requests proof through IDKit, and the Node.js backend verifies it before submitting an agent registration or an owner-authorized permission change.
+- **Alternative mempool** admits EIP-8141 frame transactions on the execution devnet. Reading a separate permission registry during validation triggers a canonical mempool restriction, so the SDK submits through the sidecar. The devnet lacked standard transaction indexing, so the SDK also tracks inclusion through the sidecar. This split lets Axon resolve names on Sepolia and execute frame transactions on the devnet.
+
+## Private permissions
+
+An optional `ScopedAgentAccount` lets an agent prove that a specific call is authorized while keeping unused rules and their spending ceilings private. The owner publishes a salted Poseidon Merkle root and shares the relevant rule and witness with the agent. The agent uses a Circom circuit to generate a Groth16 proof bound to the current root, call scope, intent nonce, and ETH value. The account verifies the proof before executing the call. The executed call and public spending budget remain visible. The [private demo](why%20zk.md) supports FinalCounter increments and ETH payments.
+
+## Repository modules
+
+| Module | What it does |
+| --- | --- |
+| [`contracts/`](contracts) | Solidity agent accounts, the permission registry, and demo contracts. |
+| [`sdk/`](sdk/README.md) | TypeScript client for ENS resolution, intent construction, frame signing, simulation, and sidecar submission. |
+| [`codegen/`](codegen) | Generates action manifests from annotated Solidity, compiled ABIs, and deployment metadata. |
+| [`agent/`](agent) | Agent runtime and command-line demo runners for selecting and executing actions. |
+| [`final/frontend/`](final/frontend/README.md) | React console for managing agents and grants, running demo calls, and viewing activity. |
+| [`final/server/`](final/server/README.md) | Node.js API for World ID verification, ENS registration and lookup, permission updates, and demo calls. |
+| [`zk/`](zk) | Circom circuit and scripts for committing private rules and generating Groth16 proofs. |
+| [`.agents/skills/axon-transactions/`](.agents/skills/axon-transactions/SKILL.md) | Codex skill for simulating or submitting FinalCounter calls with the agent runner. |
+
+The Foundry contracts use [`forge-std`](contracts/lib/forge-std) as a Git submodule for Solidity tests and scripts.
 
 ## Run locally
 
@@ -77,23 +121,3 @@ To choose different local ports:
 ```sh
 FINAL_PORT=8902 FRONTEND_PORT=5175 ./start.sh
 ```
-
-## Run the demo with Codex
-
-Set the agent’s budget and allowed functions in the Axon Permissions page.
-Then use the [axon-transactions skill](.agents/skills/axon-transactions/SKILL.md)
-in Codex and ask it to increment FinalCounter or pay an exact ETH amount.
-When no agent name is given, the skill uses the configured default devnet account.
-
-The skill runs the SDK directly against chain 1337. For named agents, it reads the name
-binding from Sepolia and uses the local agent signer. The web server is only
-needed to manage permissions. Add `--simulate` to the command for a preview
-that does not submit a transaction.
-
-## Deploy the frontend and API as one service
-
-Run `bash build.sh` at the repository root to build and copy the frontend into
-`final/server/public`, then run `bash deploy.sh` to serve the UI and API together.
-For Render, leave **Root Directory** empty, use **Build Command** `bash build.sh`
-and **Start Command** `bash deploy.sh`. See [DEPLOYMENT.md](DEPLOYMENT.md) for
-required environment variables and the root [render.yaml](render.yaml) Blueprint.
